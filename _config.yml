@@ -1,0 +1,32 @@
+# GitHub Pages configuration.
+#
+# Source: main branch, repository root (Settings -> Pages -> Build and
+# deployment -> Deploy from a branch -> main / (root)).
+# Published at https://mxreyer.github.io/bc250-jupyterhub-opencl-k3s/
+#
+# README.md becomes the landing page (Pages uses it when there is no
+# index file); BLOG.md, TUTORIAL.md and BENCHMARK.md are served next to it
+# as .html. GitHub Pages enables the jekyll-relative-links plugin by
+# default, so a link written as [TUTORIAL.md](TUTORIAL.md) resolves to
+# TUTORIAL.html on the site while still working as a file link on
+# github.com. Keep internal links in that form.
+
+title: BC-250 ML box
+description: >-
+  JupyterHub with GPU-accelerated PyTorch on an AsRock BC-250 - OpenCL
+  through Mesa rusticl, served from a single-node k3s cluster.
+
+theme: jekyll-theme-cayman
+
+# The published site is the prose only. Code, manifests, benchmark results
+# and the prebuilt extension stay in the repository and are not copied into
+# the site build.
+exclude:
+  - k8s/
+  - pytorch-dlprim-fix/
+  - results/
+  - benchmark.py
+  - compare.py
+  - Gemfile
+  - Gemfile.lock
+  - vendor/

@@ -22,6 +22,11 @@ __pycache__/
 .venv/
 venv/
 
+# Jekyll / GitHub Pages local build
+_site/
+.jekyll-cache/
+.bundle/
+
 # Editor / OS
 .DS_Store
 .vscode/

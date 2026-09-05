@@ -1,9 +1,10 @@
-# Turning a dead mining board into a multi-user ML box
+# Turning a mining board into a multi-user ML box
 
-The AsRock BC-250 is a crypto-mining board built around a cut-down variant
-of the PlayStation 5's APU: RDNA2, 40 compute units, 16 GB of unified
-memory. Mining died, the boards were dumped on the surplus market, and
-they are now some of the cheapest 16 GB compute you can put on a desk.
+The AsRock BC-250 is a crypto-mining board built around a cut-down
+variant of the PlayStation 5's APU: RDNA2, 40 compute units (after
+[unlock](https://github.com/duggasco/bc250-40cu-unlock)), 16 GB of
+unified memory. The boards were dumped on the surplus market, and they
+are now some of the cheapest 16 GB compute you can put on a desk.
 
 They are also hardware that AMD's own ML stack refuses to touch. The GPU
 reports as **gfx1013**, which ROCm does not support.
@@ -26,12 +27,14 @@ multiple users, remote access over HTTPS.
 
 ### OpenCL instead of ROCm
 
-ROCm is a dead end on gfx1013, so the GPU is reached through **rusticl**,
-Mesa's OpenCL implementation, with the out-of-tree **`pytorch_ocl`**
-backend exposing it to PyTorch as `ocl:0`. This turned out to be a
-strategic win beyond just working: the OpenCL path needs only the DRI
-render node (`/dev/dri/renderD128`), not ROCm's `/dev/kfd`, which makes
-handing the GPU to a container dramatically simpler.
+ROCm is a dead end on gfx1013, so the GPU is reached through
+**rusticl**, Mesa's OpenCL implementation, with the out-of-tree
+[**`pytorch_ocl`**
+backend](https://github.com/artyom-beilis/pytorch_dlprim) exposing it to
+PyTorch as `ocl:0`. This turned out to be a strategic win beyond just
+working: the OpenCL path needs only the DRI render node
+(`/dev/dri/renderD128`), not ROCm's `/dev/kfd`, which makes handing the
+GPU to a container dramatically simpler.
 
 ### One patch to make training work
 
@@ -106,13 +109,12 @@ Three things stand out.
 
 **Accuracy lands in the same place everywhere** — 0.922 to 0.927 across
 every platform. The OpenCL stack is numerically correct, which is the
-result that matters most. A fast wrong answer would have ended the
-project.
+result that matters most.
 
 **The gap is software, not silicon.** At 40 CUs and ~1.5 GHz the BC-250 is
 theoretically a ~6–8 TFLOP/s FP32 part — genuinely T4-class hardware. It
 delivers roughly a third of a T4's training throughput. That difference is
-kernel quality and maturity, not physics.
+kernel quality and maturity.
 
 **Inference is the sweet spot.** At 1.9× behind a T4, the board is
 perfectly respectable for serving. Training is where immature kernels and
@@ -134,11 +136,6 @@ step. For fine-tuning small models, running inference, teaching, and
 learning Kubernetes on something with real consequences, a permanently
 available 16 GB GPU under your desk beats a faster one you have to keep
 re-renting.
-
-The most transferable lesson had nothing to do with the GPU: when a stack
-refuses to work, the fix is sometimes a flag someone already wrote and
-left switched off. It was worth reading the dependency's source before
-reaching for a workaround.
 
 ---
 

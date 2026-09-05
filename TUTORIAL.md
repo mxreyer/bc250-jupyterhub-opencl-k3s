@@ -87,7 +87,7 @@ bias gradients fail to compile. `pytorch_dlprim` already contains a
 portable fallback for this; it's just off by default. Rebuild the
 extension with the fallback on (`CUSTOM_REDUCE=1`) and drop the
 resulting `pt_ocl.so` into the venv. The exact patch and a build script
-are in [`pytorch-dlprim-fix/`](pytorch-dlprim-fix/).
+are in [`pytorch-dlprim-fix/`](https://github.com/mxreyer/bc250-jupyterhub-opencl-k3s/tree/main/pytorch-dlprim-fix).
 
 ```bash
 ./pytorch-dlprim-fix/build.sh
