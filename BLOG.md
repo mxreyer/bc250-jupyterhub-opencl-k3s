@@ -128,7 +128,7 @@ is a good outcome — and it came down to one build flag.
 
 It is not a cloud GPU replacement. There is no mixed precision, no tensor
 cores, and a maturing kernel library. If you need to train fast, rent an
-A100 — it is 24× quicker and you will spend less than the electricity.
+A100 — it is 24× quicker.
 
 What it *is* very good at is being **always-on and yours**. No session
 limits, no idle timeouts disconnecting you, no per-hour meter, no upload
