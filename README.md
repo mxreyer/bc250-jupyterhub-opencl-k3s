@@ -100,6 +100,7 @@ Full detail in [TUTORIAL.md](TUTORIAL.md). Stages:
 
 | Path | What it is |
 | --- | --- |
+| [BLOG.md](BLOG.md) | Short write-up: objectives, cornerstones, benchmark results, verdict. Start here. |
 | [TUTORIAL.md](TUTORIAL.md) | End-to-end walkthrough. Stages 1-4. |
 | [BENCHMARK.md](BENCHMARK.md) | Workload rationale, protocol, results vs cloud GPUs, and how to run it anywhere. |
 | `benchmark.py`, `compare.py` | Benchmark harness (ResNet-9 / CIFAR-10). |
