@@ -1,0 +1,22 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: hub
+  namespace: jupyterhub
+  labels:
+    app: hub
+spec:
+  ingressClassName: traefik
+  rules:
+    # LAN hostname for the Hub. ${NODE_LAN_IP} is filled in from k8s/env.local
+    # by k8s/render.sh; sslip.io resolves hub.<ip>.sslip.io straight to <ip>.
+    - host: hub.${NODE_LAN_IP}.sslip.io
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: hub
+                port:
+                  name: http     # 8000, the public proxy

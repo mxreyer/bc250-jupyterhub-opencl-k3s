@@ -1,0 +1,147 @@
+{
+  "workload": "resnet9-cifar10",
+  "precision": "amp",
+  "device_arg": "cuda",
+  "device_name": "NVIDIA L4",
+  "torch": "2.11.0+cu128",
+  "python": "3.13.15",
+  "epochs": 16,
+  "batch_size": 128,
+  "train": {
+    "median_epoch_sec": 5.57,
+    "median_img_per_s": 8977.4,
+    "total_sec": 112.7,
+    "final_test_acc": 0.9252,
+    "epochs_to_0.90": 13,
+    "history": [
+      {
+        "epoch": 0,
+        "sec": 29.11,
+        "img_per_s": 1717.9,
+        "test_acc": 0.6426
+      },
+      {
+        "epoch": 1,
+        "sec": 5.56,
+        "img_per_s": 8996.7,
+        "test_acc": 0.6745
+      },
+      {
+        "epoch": 2,
+        "sec": 5.59,
+        "img_per_s": 8946.1,
+        "test_acc": 0.7475
+      },
+      {
+        "epoch": 3,
+        "sec": 5.62,
+        "img_per_s": 8903.2,
+        "test_acc": 0.6964
+      },
+      {
+        "epoch": 4,
+        "sec": 5.63,
+        "img_per_s": 8881.0,
+        "test_acc": 0.6765
+      },
+      {
+        "epoch": 5,
+        "sec": 5.64,
+        "img_per_s": 8872.0,
+        "test_acc": 0.7286
+      },
+      {
+        "epoch": 6,
+        "sec": 5.61,
+        "img_per_s": 8906.6,
+        "test_acc": 0.7604
+      },
+      {
+        "epoch": 7,
+        "sec": 5.6,
+        "img_per_s": 8926.7,
+        "test_acc": 0.6889
+      },
+      {
+        "epoch": 8,
+        "sec": 5.59,
+        "img_per_s": 8949.9,
+        "test_acc": 0.8062
+      },
+      {
+        "epoch": 9,
+        "sec": 5.57,
+        "img_per_s": 8977.4,
+        "test_acc": 0.7846
+      },
+      {
+        "epoch": 10,
+        "sec": 5.55,
+        "img_per_s": 9006.9,
+        "test_acc": 0.8171
+      },
+      {
+        "epoch": 11,
+        "sec": 5.54,
+        "img_per_s": 9023.1,
+        "test_acc": 0.8117
+      },
+      {
+        "epoch": 12,
+        "sec": 5.54,
+        "img_per_s": 9032.3,
+        "test_acc": 0.8723
+      },
+      {
+        "epoch": 13,
+        "sec": 5.54,
+        "img_per_s": 9033.4,
+        "test_acc": 0.9039
+      },
+      {
+        "epoch": 14,
+        "sec": 5.53,
+        "img_per_s": 9048.2,
+        "test_acc": 0.9207
+      },
+      {
+        "epoch": 15,
+        "sec": 5.53,
+        "img_per_s": 9043.5,
+        "test_acc": 0.9252
+      }
+    ]
+  },
+  "inference": {
+    "bs1": {
+      "lat_ms_p50": 1.272,
+      "lat_ms_p90": 1.308,
+      "lat_ms_p99": 1.568,
+      "img_per_s": 786.1
+    },
+    "bs8": {
+      "lat_ms_p50": 1.197,
+      "lat_ms_p90": 1.247,
+      "lat_ms_p99": 1.639,
+      "img_per_s": 6683.0
+    },
+    "bs32": {
+      "lat_ms_p50": 1.558,
+      "lat_ms_p90": 1.658,
+      "lat_ms_p99": 1.677,
+      "img_per_s": 20537.3
+    },
+    "bs128": {
+      "lat_ms_p50": 6.987,
+      "lat_ms_p90": 7.041,
+      "lat_ms_p99": 7.255,
+      "img_per_s": 18320.9
+    },
+    "bs256": {
+      "lat_ms_p50": 15.556,
+      "lat_ms_p90": 15.709,
+      "lat_ms_p99": 16.044,
+      "img_per_s": 16456.3
+    }
+  }
+}

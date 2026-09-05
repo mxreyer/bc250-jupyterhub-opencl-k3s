@@ -1,0 +1,29 @@
+# Host-specific config + manifests rendered from k8s/**/*.yaml.tmpl by
+# k8s/render.sh. Commit the .tmpl files and k8s/env.example, not these.
+/k8s/env.local
+/k8s/jupyterhub/30-configmap.yaml
+/k8s/jupyterhub/50-deployment.yaml
+/k8s/jupyterhub/70-ingress.yaml
+
+# Benchmark dataset download (~170 MB, benchmark.py --data ./data)
+/data/
+
+# Build scratch
+/pytorch-dlprim-fix/scratch/
+/k8s/jupyterhub/notebook-image/pt_ocl.so
+
+# Default scratch benchmark output (named results/*.json are kept)
+/results/bench.json
+
+# Python / Jupyter
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+.venv/
+venv/
+
+# Editor / OS
+.DS_Store
+.vscode/
+.idea/
+*.swp

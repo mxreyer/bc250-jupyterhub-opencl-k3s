@@ -1,0 +1,22 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: hub
+  namespace: jupyterhub
+  labels:
+    app: hub
+spec:
+  type: ClusterIP
+  selector:
+    app: hub
+  ports:
+    # Public traffic (browser -> Ingress -> here -> in-process proxy).
+    - name: http
+      port: 8000
+      targetPort: http
+    # Hub REST API. Singleuser pods reach this at
+    # http://hub.jupyterhub.svc.cluster.local:8081 (see hub_connect_url in the
+    # ConfigMap). Not exposed via Ingress.
+    - name: api
+      port: 8081
+      targetPort: api

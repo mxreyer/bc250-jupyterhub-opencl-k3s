@@ -1,0 +1,21 @@
+# TEMPLATE ONLY - do not apply (the .txt extension keeps `kubectl apply -f
+# k8s/jupyterhub/` from picking it up). Create the real Secret with a fresh
+# auth key (kept out of git):
+#
+#   sudo kubectl -n jupyterhub create secret generic tailscale-auth \
+#     --from-literal=authkey=tskey-auth-XXXXXXXX
+#
+# The key must be authorized for whatever tag this node advertises
+# (TS_EXTRA_ARGS in 50-deployment.yaml.tmpl). Reusable is convenient; a one-off is
+# fine too since the node identity then persists on the hub-state PVC and the
+# key is only used on first registration. Do NOT make it ephemeral - an
+# ephemeral node is removed when it disconnects, so every Hub pod restart would
+# churn a new tailnet machine.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: tailscale-auth
+  namespace: jupyterhub
+type: Opaque
+stringData:
+  authkey: "tskey-auth-REPLACE"

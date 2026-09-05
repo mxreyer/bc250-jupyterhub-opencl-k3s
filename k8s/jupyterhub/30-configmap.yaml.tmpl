@@ -1,0 +1,141 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: hub-config
+  namespace: jupyterhub
+data:
+  jupyterhub_config.py: |
+    # JupyterHub config for the BC-250 single-node k3s box.
+    # Loaded by the Hub Deployment via: jupyterhub -f <this file>.
+    import os
+
+    c = get_config()  # noqa: F821  (injected by jupyterhub at load time)
+
+    # ── Hub / proxy network wiring ────────────────────────────────────────
+    # Internal listen address of the in-process configurable-http-proxy. The
+    # "hub" Service and the Ingress both point at this.
+    c.JupyterHub.bind_url = "http://0.0.0.0:8000"
+
+    # External HTTPS URL, terminated by Tailscale Serve on the sidecar. With
+    # this set, JupyterHub emits https:// redirects and Secure cookies even
+    # though the request reaches it as plain HTTP from the sidecar (it shares
+    # this pod's network namespace and proxies 127.0.0.1:8000 - see
+    # 35-tailscale-serve.yaml). Keep bind_url above as-is; setting only
+    # public_url would make the proxy try to bind the .ts.net name and fail.
+    #   Host = ${TS_HOSTNAME}.${TS_TAILNET}, filled in from k8s/env.local by
+    #   k8s/render.sh. Must match TS_HOSTNAME in 50-deployment.yaml.tmpl.
+    c.JupyterHub.public_url = "https://${TS_HOSTNAME}.${TS_TAILNET}/"
+
+    # The Hub's own REST API. Two distinct settings:
+    #   hub_bind_url    - the local listen socket. Must be a bindable address,
+    #                     so 0.0.0.0 (all interfaces), NOT the Service name.
+    #   hub_connect_url - what singleuser pods are told to call back on. Must be
+    #                     routable from other pods, so the Service DNS name,
+    #                     NOT localhost (localhost would mean "my own pod").
+    c.JupyterHub.hub_bind_url = "http://0.0.0.0:8081"
+    c.JupyterHub.hub_connect_url = "http://hub.jupyterhub.svc.cluster.local:8081"
+
+    # Shared secret with the proxy subprocess (from the hub-secrets Secret).
+    c.ConfigurableHTTPProxy.auth_token = os.environ["CONFIGPROXY_AUTH_TOKEN"]
+    # JUPYTERHUB_CRYPT_KEY is picked up from the environment automatically.
+
+    # ── Persistent Hub state (on the hub-state PVC) ───────────────────────
+    # NOTE: four slashes = absolute path. Three would be relative to CWD.
+    c.JupyterHub.db_url = "sqlite:////srv/jupyterhub/state/jupyterhub.sqlite"
+    c.JupyterHub.cookie_secret_file = "/srv/jupyterhub/state/jupyterhub_cookie_secret"
+
+    # ── Authentication ───────────────────────────────────────────────────
+    # NativeAuthenticator: per-user passwords, managed by the users themselves.
+    #   /hub/signup           - create an account (username + password)
+    #   /hub/authorize        - admin approves pending signups (open_signup off)
+    #   /hub/change-password  - any logged-in user changes their own password
+    # Credentials are bcrypt-hashed in the Hub DB on the hub-state PVC.
+    c.JupyterHub.authenticator_class = "nativeauthenticator.NativeAuthenticator"
+
+    # New signups need an admin to approve them before they can log in.
+    c.NativeAuthenticator.open_signup = False
+    # Password rules.
+    c.NativeAuthenticator.minimum_password_length = 10
+    c.NativeAuthenticator.check_common_password = True
+    # Basic brute-force slowdown: lock an account for 10 min after 5 bad tries.
+    c.NativeAuthenticator.allowed_failed_logins = 5
+    c.NativeAuthenticator.seconds_before_next_try = 600
+
+    # Admins: auto-approved on signup, and can approve others / manage users at
+    # /hub/authorize and /hub/admin. ${HUB_ADMIN} from k8s/env.local.
+    c.Authenticator.admin_users = {"${HUB_ADMIN}"}
+
+    # JupyterHub 5's check_allowed() denies every user unless allow_all is set
+    # or they're listed in allowed_users. NativeAuthenticator already decides
+    # who may log in (signup + admin authorize + correct password), so this
+    # outer gate is redundant here: allow_all=True means "trust whoever NA
+    # authenticates", NOT "anyone can log in". Without it, login always fails
+    # with a generic "Invalid username or password".
+    c.Authenticator.allow_all = True
+
+    # ── Spawner: one GPU-enabled pod per user ────────────────────────────
+    c.JupyterHub.spawner_class = "kubespawner.KubeSpawner"
+    c.KubeSpawner.namespace = "jupyterhub"
+
+    c.KubeSpawner.image = "bc250-notebook:latest"
+    c.KubeSpawner.image_pull_policy = "Never"
+    c.KubeSpawner.cmd = ["jupyterhub-singleuser"]
+    c.KubeSpawner.default_url = "/lab"
+    c.KubeSpawner.start_timeout = 300
+    c.KubeSpawner.http_timeout = 120
+
+    # ── GPU wiring (added in Stage 4) ────────────────────────────────────
+    # For a CPU-only Hub (Stage 3), comment out the two extra_resource_* lines
+    # here, the RUSTICL_ENABLE environment below, and supplemental_gids = [105]
+    # further down. With them active, every user pod requests devic.es/dri and
+    # stays Pending until the generic-device-plugin DaemonSet is running.
+    c.KubeSpawner.extra_resource_limits = {"devic.es/dri": "1"}
+    c.KubeSpawner.extra_resource_guarantees = {"devic.es/dri": "1"}
+    c.KubeSpawner.mem_limit = "6G"
+    c.KubeSpawner.mem_guarantee = "1G"
+    c.KubeSpawner.cpu_limit = 4
+    c.KubeSpawner.cpu_guarantee = 0.25
+    c.KubeSpawner.environment = {"RUSTICL_ENABLE": "radeonsi"}
+
+    # uid/gid match the image's "jovyan" user; fs_gid 1000 makes the per-user
+    # PVC writable. supplemental 105 = host "render" group for /dev/dri (Stage
+    # 4 — see the GPU-wiring note above).
+    c.KubeSpawner.uid = 1000
+    c.KubeSpawner.gid = 1000
+    c.KubeSpawner.fs_gid = 1000
+    c.KubeSpawner.supplemental_gids = [105]
+
+    # ── Per-user persistent storage (dynamic, local-path) ────────────────
+    c.KubeSpawner.storage_pvc_ensure = True
+    c.KubeSpawner.storage_capacity = "10Gi"
+    c.KubeSpawner.storage_access_modes = ["ReadWriteOnce"]
+    c.KubeSpawner.pvc_name_template = "claim-{username}"
+    c.KubeSpawner.volumes = [
+        {"name": "home", "persistentVolumeClaim": {"claimName": "claim-{username}"}}
+    ]
+    c.KubeSpawner.volume_mounts = [
+        {"name": "home", "mountPath": "/home/jovyan"}
+    ]
+
+    # ── Cull idle servers so the GPU/RAM get freed ───────────────────────
+    c.JupyterHub.services = [
+        {
+            "name": "idle-culler",
+            "command": [
+                "python3", "-m", "jupyterhub_idle_culler", "--timeout=3600",
+                # Talk to the Hub over loopback - the culler runs in the Hub
+                # pod, so this avoids a dependency on the Service being ready.
+                "--url=http://localhost:8081/hub/api",
+            ],
+        }
+    ]
+    c.JupyterHub.load_roles = [
+        {
+            "name": "idle-culler",
+            "services": ["idle-culler"],
+            "scopes": [
+                "list:users", "read:users:activity",
+                "read:servers", "delete:servers",
+            ],
+        }
+    ]

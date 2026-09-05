@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: jupyterhub
+# Everything lives here: the Hub pod and every per-user server pod.
+# KubeSpawner launches each user's pod into the Hub's own namespace, so the
+# Role in 10-rbac.yaml (namespace-scoped) covers them.

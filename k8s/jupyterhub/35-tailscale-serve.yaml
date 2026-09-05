@@ -1,0 +1,28 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: tailscale-serve
+  namespace: jupyterhub
+data:
+  # Declarative Tailscale Serve config, proxying to 127.0.0.1 - the tailscale
+  # container shares the Hub pod's network namespace, so localhost:8000 is the
+  # Hub's in-process proxy (c.JupyterHub.bind_url).
+  # ${TS_CERT_DOMAIN} is substituted by the tailscale image at runtime with the
+  # node's full name, e.g. juphub.your-name.ts.net.
+  # AllowFunnel:false keeps it tailnet-only (no public internet).
+  serve.json: |
+    {
+      "TCP": {
+        "443": { "HTTPS": true }
+      },
+      "Web": {
+        "${TS_CERT_DOMAIN}:443": {
+          "Handlers": {
+            "/": { "Proxy": "http://127.0.0.1:8000" }
+          }
+        }
+      },
+      "AllowFunnel": {
+        "${TS_CERT_DOMAIN}:443": false
+      }
+    }

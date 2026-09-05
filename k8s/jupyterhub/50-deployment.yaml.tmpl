@@ -1,0 +1,165 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: hub
+  namespace: jupyterhub
+  labels:
+    app: hub
+spec:
+  replicas: 1
+  strategy:
+    # RWO state PVC -> never two Hub pods at once.
+    type: Recreate
+  selector:
+    matchLabels:
+      app: hub
+  template:
+    metadata:
+      labels:
+        app: hub
+      annotations:
+        # Roll the pod automatically when the config changes. Bump this by hand
+        # (or `kubectl rollout restart`) after editing 30-configmap.yaml.tmpl or
+        # 35-tailscale-serve.yaml.
+        config-revision: "7"
+    spec:
+      # The identity from 10-rbac.yaml - grants the API calls KubeSpawner makes.
+      serviceAccountName: hub
+
+      securityContext:
+        # The upstream jupyterhub image runs as root; run explicitly as root so
+        # writes to the state PVC (root-owned by local-path) always work.
+        # Hardening later = non-root user + fsGroup. Fine for a homelab hub.
+        runAsUser: 0
+
+      volumes:
+        - name: config
+          configMap:
+            name: hub-config
+        - name: state
+          persistentVolumeClaim:
+            claimName: hub-state
+        - name: tailscale-serve
+          configMap:
+            name: tailscale-serve
+
+      containers:
+        - name: hub
+          image: bc250-jupyterhub:latest
+          imagePullPolicy: Never       # built locally, imported into k3s
+          command:
+            - jupyterhub
+            - --config
+            - /srv/jupyterhub/config/jupyterhub_config.py
+
+          env:
+            - name: CONFIGPROXY_AUTH_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: hub-secrets
+                  key: CONFIGPROXY_AUTH_TOKEN
+            - name: JUPYTERHUB_CRYPT_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: hub-secrets
+                  key: JUPYTERHUB_CRYPT_KEY
+
+          ports:
+            - name: http           # public proxy
+              containerPort: 8000
+            - name: api            # hub REST API (singleuser pods call back here)
+              containerPort: 8081
+
+          volumeMounts:
+            - name: config
+              mountPath: /srv/jupyterhub/config
+              readOnly: true
+            - name: state
+              mountPath: /srv/jupyterhub/state
+
+          resources:
+            requests:
+              cpu: "100m"
+              memory: 256Mi
+            limits:
+              cpu: "1"
+              memory: 1Gi
+
+          # /hub/health is a plain 200 when the Hub is up. Give it generous
+          # startup room (DB migration on first boot).
+          startupProbe:
+            httpGet:
+              path: /hub/health
+              port: api
+            periodSeconds: 5
+            failureThreshold: 30
+          readinessProbe:
+            httpGet:
+              path: /hub/health
+              port: api
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /hub/health
+              port: api
+            periodSeconds: 20
+
+        # ── Tailscale sidecar: publishes the Hub to the tailnet over HTTPS ──
+        # Shares this pod's network namespace, so serve.json (35-tailscale-
+        # serve.yaml) proxies tailnet :443 -> 127.0.0.1:8000 (the Hub's proxy).
+        - name: tailscale
+          image: tailscale/tailscale:latest
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: TS_AUTHKEY
+              valueFrom:
+                secretKeyRef:
+                  name: tailscale-auth
+                  key: authkey
+            # Node name -> <this>.<tailnet>.ts.net. Must match the host in
+            # c.JupyterHub.public_url (30-configmap.yaml.tmpl). ${TS_HOSTNAME} from
+            # k8s/env.local via k8s/render.sh.
+            - name: TS_HOSTNAME
+              value: ${TS_HOSTNAME}
+            # Userspace WireGuard: no /dev/net/tun, no NET_ADMIN needed. This
+            # is how the Tailscale k8s operator runs its own proxies. `serve`
+            # (incl. HTTPS cert provisioning) works fine in this mode.
+            - name: TS_USERSPACE
+              value: "true"
+            # The tailscale image auto-detects Kubernetes and defaults to
+            # storing state in a Secret (needs RBAC we haven't granted).
+            # Empty string disables that: use plain file state in TS_STATE_DIR,
+            # which is the tailscale/ subdir of the hub-state PVC below.
+            - name: TS_KUBE_SECRET
+              value: ""
+            - name: TS_STATE_DIR
+              value: /var/lib/tailscale
+            - name: TS_SERVE_CONFIG
+              value: /config/serve.json
+            # ${TS_TAG} (the tag your auth key is authorized for) from
+            # k8s/env.local. Delete this env entirely if the key is pre-tagged.
+            - name: TS_EXTRA_ARGS
+              value: "--advertise-tags=${TS_TAG}"
+          volumeMounts:
+            - name: tailscale-serve
+              mountPath: /config
+              readOnly: true
+            # Persist the node identity so a Hub pod restart reconnects as the
+            # SAME tailnet machine instead of registering a new one. Lives in a
+            # subdir of the existing hub-state PVC - no extra volume.
+            - name: state
+              mountPath: /var/lib/tailscale
+              subPath: tailscale
+          resources:
+            requests:
+              cpu: "20m"
+              memory: 32Mi
+            limits:
+              cpu: "200m"
+              memory: 128Mi
+          livenessProbe:
+            exec:
+              command: ["tailscale", "status", "--peers=false"]
+            initialDelaySeconds: 20
+            periodSeconds: 30
+            failureThreshold: 4

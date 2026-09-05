@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: hub-state
+  namespace: jupyterhub
+  labels:
+    app: hub
+spec:
+  # Just the Hub's SQLite DB + generated cookie secret. Tiny, but it MUST
+  # persist: lose it and every user's server-state and API tokens are orphaned.
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+  # default StorageClass = k3s local-path. Pending until the Hub pod mounts it.

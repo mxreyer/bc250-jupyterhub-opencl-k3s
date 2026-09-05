@@ -1,0 +1,90 @@
+# generic-device-plugin: advertises /dev/dri/renderD128 to the kubelet as an
+# allocatable resource ("devic.es/dri" - "devic.es" is this plugin's default
+# resource domain) so ordinary, NON-privileged pods can request the GPU render
+# node and get it mounted with the right device-cgroup permission - and only
+# that device.
+#
+# Honest trade-off: the plugin DaemonSet itself runs privileged, because
+# managing host devices requires it. But that's one tiny, single-purpose infra
+# pod (20Mi RAM) instead of every workload pod running privileged. Blast radius
+# goes from "the notebook can touch any device" to "a 3 MB device-broker can".
+#
+# Apply:  sudo kubectl apply -f k8s/device-plugin/generic-device-plugin.yaml
+# Check:  sudo kubectl -n kube-system get pod -l app.kubernetes.io/name=generic-device-plugin
+#         sudo kubectl get node bc250 -o jsonpath='{.status.allocatable}' ; echo
+#         (should list  "devic.es/dri": "10")
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: generic-device-plugin
+  namespace: kube-system
+  labels:
+    app.kubernetes.io/name: generic-device-plugin
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: generic-device-plugin
+  updateStrategy:
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: generic-device-plugin
+    spec:
+      priorityClassName: system-node-critical
+      tolerations:
+        # Run on every node regardless of taints - a device plugin is
+        # infrastructure, same rationale as kube-proxy.
+        - operator: Exists
+          effect: NoExecute
+        - operator: Exists
+          effect: NoSchedule
+      containers:
+        - name: generic-device-plugin
+          # This project publishes no semver tags, so we pin the digest. The
+          # :latest is kept only as a human-readable hint; the @sha256 is what
+          # actually resolves, and it can't change under us. Re-pin by running
+          #   sudo docker pull ghcr.io/squat/generic-device-plugin:latest
+          #   sudo docker inspect --format='{{index .RepoDigests 0}}' \
+          #     ghcr.io/squat/generic-device-plugin:latest
+          # (pinned 2026-09-02)
+          image: ghcr.io/squat/generic-device-plugin:latest@sha256:dc192e164c69b03f156765793a1be62ca437709ae477b27ca7d8f3dcf5021576
+          imagePullPolicy: IfNotPresent
+          args:
+            - --device
+            - |
+              name: dri
+              groups:
+                # count: 10  -> the single render node can back up to 10
+                # concurrent claims. rusticl compute contexts share the device
+                # fine; this is just how many pods may hold "devic.es/dri: 1"
+                # at once.
+                - count: 10
+                  paths:
+                    - path: /dev/dri/renderD128
+          resources:
+            requests:
+              cpu: 50m
+              memory: 20Mi
+            limits:
+              cpu: 50m
+              memory: 20Mi
+          ports:
+            - containerPort: 8080
+              name: http
+          securityContext:
+            privileged: true
+          volumeMounts:
+            - name: device-plugin
+              mountPath: /var/lib/kubelet/device-plugins
+            - name: dev
+              mountPath: /dev
+      volumes:
+        # The kubelet's device-plugin registration socket directory.
+        - name: device-plugin
+          hostPath:
+            path: /var/lib/kubelet/device-plugins
+        - name: dev
+          hostPath:
+            path: /dev

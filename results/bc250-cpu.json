@@ -1,0 +1,75 @@
+{
+  "workload": "resnet9-cifar10",
+  "precision": "fp32",
+  "device_arg": "cpu",
+  "device_name": "x86_64",
+  "torch": "2.4.0+cpu",
+  "python": "3.12.14",
+  "epochs": 4,
+  "batch_size": 128,
+  "train": {
+    "median_epoch_sec": 717.54,
+    "median_img_per_s": 69.7,
+    "total_sec": 2828.5,
+    "final_test_acc": 0.8769,
+    "epochs_to_0.90": null,
+    "history": [
+      {
+        "epoch": 0,
+        "sec": 673.34,
+        "img_per_s": 74.3,
+        "test_acc": 0.6051
+      },
+      {
+        "epoch": 1,
+        "sec": 717.54,
+        "img_per_s": 69.7,
+        "test_acc": 0.7075
+      },
+      {
+        "epoch": 2,
+        "sec": 717.29,
+        "img_per_s": 69.7,
+        "test_acc": 0.7693
+      },
+      {
+        "epoch": 3,
+        "sec": 720.35,
+        "img_per_s": 69.4,
+        "test_acc": 0.8769
+      }
+    ]
+  },
+  "inference": {
+    "bs1": {
+      "lat_ms_p50": 8.286,
+      "lat_ms_p90": 30.497,
+      "lat_ms_p99": 34.413,
+      "img_per_s": 120.7
+    },
+    "bs8": {
+      "lat_ms_p50": 47.824,
+      "lat_ms_p90": 64.333,
+      "lat_ms_p99": 80.167,
+      "img_per_s": 167.3
+    },
+    "bs32": {
+      "lat_ms_p50": 144.705,
+      "lat_ms_p90": 155.809,
+      "lat_ms_p99": 201.096,
+      "img_per_s": 221.1
+    },
+    "bs128": {
+      "lat_ms_p50": 597.784,
+      "lat_ms_p90": 621.728,
+      "lat_ms_p99": 695.122,
+      "img_per_s": 214.1
+    },
+    "bs256": {
+      "lat_ms_p50": 1245.696,
+      "lat_ms_p90": 1313.029,
+      "lat_ms_p99": 1347.312,
+      "img_per_s": 205.5
+    }
+  }
+}

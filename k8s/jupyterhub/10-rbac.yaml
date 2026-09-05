@@ -1,0 +1,59 @@
+# RBAC for the Hub: it calls the Kubernetes API to spawn/delete a pod (and a
+# PVC) per user. Three objects, the standard pattern:
+#   ServiceAccount  - an identity a pod can run as
+#   Role            - a list of allowed (verbs x resources), namespace-scoped
+#   RoleBinding     - "this ServiceAccount gets this Role"
+# A Role (not ClusterRole) means these powers stop at the jupyterhub namespace.
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: hub
+  namespace: jupyterhub
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: hub
+  namespace: jupyterhub
+rules:
+  # Create/delete the per-user singleuser server pods, and read their state
+  # and logs to know when they're up or why they failed.
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "watch", "create", "delete"]
+  - apiGroups: [""]
+    resources: ["pods/log"]
+    verbs: ["get"]
+  # KubeSpawner watches events to surface "why is my server not starting"
+  # (image pull, scheduling failures) back to the user in the spawn progress page.
+  - apiGroups: [""]
+    resources: ["events"]
+    verbs: ["get", "list", "watch"]
+  # Per-user persistent storage: the Hub ensures a PVC exists before the pod.
+  - apiGroups: [""]
+    resources: ["persistentvolumeclaims"]
+    verbs: ["get", "list", "watch", "create", "delete"]
+  # KubeSpawner stores each user's server API token in a Secret it manages.
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["get", "list", "watch", "create", "delete"]
+  # Some KubeSpawner networking modes create a Service per user pod. We don't
+  # enable that, but watching Services is cheap and avoids a surprise later.
+  - apiGroups: [""]
+    resources: ["services"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: hub
+  namespace: jupyterhub
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: hub
+subjects:
+  - kind: ServiceAccount
+    name: hub
+    namespace: jupyterhub
