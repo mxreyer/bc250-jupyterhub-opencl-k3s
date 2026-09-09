@@ -19,7 +19,7 @@ multiple users, remote access over HTTPS.
 2. **Serve it to more than one person** — real accounts, persistent
    storage, notebooks in a browser.
 3. **Learn Kubernetes properly** by operating something real, in plain
-   manifests rather than a Helm chart someone else wrote.
+   manifests rather than a Helm chart.
 4. **Measure it honestly** against cloud GPUs, rather than hand-waving
    about "good enough".
 
