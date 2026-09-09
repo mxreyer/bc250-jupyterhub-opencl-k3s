@@ -15,9 +15,15 @@ BC-250 (OpenCL) and on any CUDA cloud GPU.
   and `pytorch_ocl` has no mixed precision). Cloud cards get a *second* run
   with `--amp` for their realistic best case.
 
-## Results (2026-09-02)
+## Results (2026-09-09)
 
-BC-250 on `ocl:0` at two GPU-core configs (24 and 40 CUs enabled); cloud cards from Google Colab.
+BC-250 on `ocl:0` at three configs — 24 CU and 40 CU at the stock ~1.5 GHz,
+and 40 CU with the GPU overclocked to 2.0 GHz; cloud cards from Google Colab.
+The `vs BC-250 40 CU` column is relative to the stock 40 CU config, so the
+overclock reads as a delta against it.
+The extra CUs and the clock are unlocked on the host, outside this repo — see
+[duggasco/bc250-40cu-unlock](https://github.com/duggasco/bc250-40cu-unlock).
+`benchmark.py` is unchanged across all three runs.
 
 ### Training
 
@@ -26,8 +32,9 @@ BC-250 on `ocl:0` at two GPU-core configs (24 and 40 CUs enabled); cloud cards f
 | BC-250, CPU only | fp32 | 70 | 718 | 0.877 | 0.09× |
 | BC-250, 24 CU | fp32 | 532 | 93.9 | 0.927 | 0.68× |
 | **BC-250, 40 CU** | **fp32** | **786** | **63.6** | **0.923** | **1.0×** |
+| BC-250, 40 CU @ 2.0 GHz | fp32 | 919 | 54.4 | 0.924 | 1.17× |
 | T4 (Colab) | fp32 | 2,294 | 21.8 | 0.926 | 2.9× |
-| T4 (Colab) | amp | 4,441 | 11.3 | 0.923 | 5.6× |
+| T4 (Colab) | amp | 4,441 | 11.3 | 0.923 | 5.7× |
 | L4 (Colab) | fp32 | 3,370 | 14.8 | 0.927 | 4.3× |
 | L4 (Colab) | amp | 8,977 | 5.6 | 0.925 | 11× |
 | A100 (Colab) | fp32 | 7,377 | 6.8 | 0.924 | 9.4× |
@@ -42,6 +49,7 @@ BC-250 on `ocl:0` at two GPU-core configs (24 and 40 CUs enabled); cloud cards f
 | BC-250, CPU only | fp32 | 214 | 0.06× |
 | BC-250, 24 CU | fp32 | 2,586 | 0.66× |
 | **BC-250, 40 CU** | **fp32** | **3,892** | **1.0×** |
+| BC-250, 40 CU @ 2.0 GHz | fp32 | 4,489 | 1.15× |
 | T4 (Colab) | fp32 | 7,217 | 1.9× |
 | T4 (Colab) | amp | 7,355 | 1.9× |
 | L4 (Colab) | fp32 | 12,119 | 3.1× |
@@ -52,11 +60,14 @@ BC-250 on `ocl:0` at two GPU-core configs (24 and 40 CUs enabled); cloud cards f
 ### Notes
 
 - 24 → 40 CUs scaled 532 → 786 img/s = **1.48× for a 1.67× core bump**
-- Inference gap between BC-250 @ 40 CUs and T4 is only **~1.9×**
+- 40 CUs @ 1.5 GHz → 40 CUs @ 2.0GHz scaled 786 → 919 img/s = **1.17× for a 1.33× clock bump**
+- Together the two unlocks are worth **1.73× over the 24 CU stock config**.
+- Inference gap between BC-250 @ 40 CUs and T4 is only **~1.9×** (1.6×
+  with the GPU clocked to 2.0 GHz).
 - Accuracy matches everywhere (0.922–0.927): the stack is numerically correct.
-- @ 40 CUs / ~1.5 GHz the BC-250 is ~6–8 TFLOP/s FP32 → genuinely
-  T4-class *silicon*. The ~3× FP32 gap is almost entirely **software
-  stack** (kernel quality & maturity).
+- **The gap is software, not silicon.** @ 40 CUs / ~1.5 GHz the BC-250 is
+  ~7.7 TFLOP/s FP32 → genuinely T4-class *silicon* (8.1). The ~3× FP32 gap
+  is almost entirely **software stack** (kernel quality & maturity).
 
 ---
 

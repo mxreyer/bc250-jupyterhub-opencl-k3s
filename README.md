@@ -67,8 +67,8 @@ This uses a patched version of `pytorch_ocl` from
 
 Trade-off: Performance well below native CUDA/ROCm. See
 [BENCHMARK.md](BENCHMARK.md) — roughly 3× slower than a cloud T4 in
-FP32, ~5–6× against a T4 running mixed precision. The point is that it
-*works* on hardware ROCm refuses.
+FP32 and ~5–6× against a T4 running mixed precision. The point is
+that it *works* on hardware ROCm refuses.
 
 ## Prerequisites
 

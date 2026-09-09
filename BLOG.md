@@ -80,51 +80,61 @@ remote access, in userspace, with no extra privileges.
 ## Benchmark
 
 Identical workload everywhere — **ResNet-9 on CIFAR-10**, 16 epochs, batch
-128, FP32. The BC-250 was measured at both 24 and 40 compute units; cloud
-cards get a second run with mixed precision (`--amp`) for their realistic
-best case, which the BC-250 cannot do at all.
+128, FP32. The BC-250 was measured at 24 CUs, at 40 CUs, and at 40 CUs with
+the GPU clocked up to 2.0 GHz; cloud cards get a second run with mixed
+precision (`--amp`) for their realistic best case, which the BC-250 cannot
+do at all.
 
 **Training throughput**
 
-| Platform | Precision | img/s | vs BC-250 |
+| Platform | Precision | img/s | vs BC-250 40 CU |
 | --- | --- | ---: | ---: |
 | BC-250, CPU only | fp32 | 70 | 0.09× |
 | BC-250, 24 CU | fp32 | 532 | 0.68× |
 | **BC-250, 40 CU** | **fp32** | **786** | **1.0×** |
+| BC-250, 40 CU @ 2.0 GHz | fp32 | 919 | 1.17× |
 | T4 (Colab) | fp32 | 2,294 | 2.9× |
-| T4 (Colab) | amp | 4,441 | 5.6× |
+| T4 (Colab) | amp | 4,441 | 5.7× |
 | A100 (Colab) | fp32 | 7,377 | 9.4× |
 | A100 (Colab) | amp | 18,690 | 24× |
 
 **Inference throughput** (batch 128)
 
-| Platform | Precision | img/s | vs BC-250 |
+| Platform | Precision | img/s | vs BC-250 40 CU |
 | --- | --- | ---: | ---: |
-| BC-250, 40 CU | fp32 | 3,892 | 1.0× |
+| **BC-250, 40 CU** | **fp32** | **3,892** | **1.0×** |
+| BC-250, 40 CU @ 2.0 GHz | fp32 | 4,489 | 1.15× |
 | T4 (Colab) | fp32 | 7,217 | 1.9× |
 | T4 (Colab) | amp | 7,355 | 1.9× |
 | A100 (Colab) | amp | 49,612 | 13× |
 
-Three things stand out.
+Four things stand out.
 
 **Accuracy lands in the same place everywhere** — 0.922 to 0.927 across
 every platform. The OpenCL stack is numerically correct, which is the
 result that matters most.
 
 **The gap is software, not silicon.** At 40 CUs and ~1.5 GHz the BC-250 is
-theoretically a ~6–8 TFLOP/s FP32 part — genuinely T4-class hardware. It
-delivers roughly a third of a T4's training throughput. That difference is
-kernel quality and maturity.
+theoretically a ~7.7 TFLOP/s FP32 part against a T4's 8.1 — genuinely
+T4-class hardware. It delivers roughly a third of a T4's training
+throughput. That difference is kernel quality and maturity.
 
-**Inference is the sweet spot.** At 1.9× behind a T4, the board is
+**Neither of the BC250 unlocks scales linearly.** Going 24 → 40 CUs
+bought 1.48× for 1.67× the cores; 1.5 → 2.0 GHz bought 1.17× for 1.33×
+the clock. Still, the two unlocks together are worth 1.73× over the
+stock 24 CU config, which is free performance.
+
+**Inference is the sweet spot.** At 1.9× behind a T4 — 1.6× overclocked —
+the board is
 perfectly respectable for serving. Training is where immature kernels and
 the total absence of mixed precision hurt most.
 
 ## Verdict
 
 For surplus mining hardware running on a driver stack nobody intended for
-compute, roughly one-third of a cloud T4 in training and half in inference
-is a good outcome — and it came down to one build flag.
+compute, roughly one-third of a cloud T4 in training and half of one in
+inference is a good outcome — and it came down to one build flag. The
+host-side unlocks add another 17% on top.
 
 It is not a cloud GPU replacement. There is no mixed precision, no tensor
 cores, and a maturing kernel library. If you need to train fast, rent an
