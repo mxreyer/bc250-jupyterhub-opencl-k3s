@@ -9,7 +9,7 @@
   plus every manifest, Dockerfile, and helper script. It is explicitly for
   learning, **not a production reference**.
 
-> New here? Read [**BLOG.md**](BLOG.md)!
+> Want a summary? Read [**BLOG.md**](BLOG.md)!
 
 > Want to set it up yourself? Read [**TUTORIAL.md**](TUTORIAL.md)!
 
