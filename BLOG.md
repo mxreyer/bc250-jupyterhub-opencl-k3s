@@ -4,14 +4,19 @@ The AsRock BC-250 is a crypto-mining board built around a cut-down
 variant of the PlayStation 5's APU: RDNA2, 40 compute units (after
 [unlock](https://github.com/duggasco/bc250-40cu-unlock)), 16 GB of
 unified memory. The boards were dumped on the surplus market, and they
-are now some of the cheapest 16 GB compute you can put on a desk.
+are now some of the cheapest 16 GB compute you can put on a desk. (Well,
+at least they were, until popularized by mainstream YouTubers; prices
+have risen from around $100 to over $300.)
 
 They are also hardware that AMD's own ML stack refuses to touch. The GPU
-reports as **gfx1013**, which ROCm does not support.
+reports as **gfx1013**, which ROCm does not support; I had to resort
+to OpenCL through a [third-party backend](https://github.com/artyom-beilis/pytorch_dlprim).
 
 I wanted to know how far you could push one anyway. The answer turned into
 a small ML server: JupyterHub on Kubernetes, GPU-accelerated PyTorch,
 multiple users, remote access over HTTPS.
+Besides that, I managed to push ML training performance by more than
+100% by profiling and fixing the OpenCL stack.
 
 ## Objectives
 
@@ -80,10 +85,13 @@ remote access, in userspace, with no extra privileges.
 ## Benchmark
 
 Identical workload everywhere — **ResNet-9 on CIFAR-10**, 16 epochs, batch
-128, FP32. The BC-250 was measured at 24 CUs, at 40 CUs, and at 40 CUs with
-the GPU clocked up to 2.0 GHz; cloud cards get a second run with mixed
-precision (`--amp`) for their realistic best case, which the BC-250 cannot
-do at all.
+128, FP32. The BC-250 was measured at 24 CUs, at 40 CUs, at 40 CUs with
+the GPU clocked up to 2.0 GHz, and at that clock with the software fixes
+from [pytorch-dlprim-gfx1013](https://github.com/mxreyer/pytorch-dlprim-gfx1013)
+(what ships in the notebook image); cloud cards get a second run with mixed
+precision (`--amp`) for their realistic best case. The BC-250's nearest
+counterpart is `DLPRIM_CONV_FP16=1`: fp16 inside the convolution kernels,
+fp32 everywhere else.
 
 **Training throughput**
 
@@ -93,6 +101,8 @@ do at all.
 | BC-250, 24 CU | fp32 | 532 | 0.68× |
 | **BC-250, 40 CU** | **fp32** | **786** | **1.0×** |
 | BC-250, 40 CU @ 2.0 GHz | fp32 | 919 | 1.17× |
+| **BC-250, 40 CU @ 2.0 GHz, fixed** | **fp32** | **2,055** | **2.61×** |
+| BC-250, same, `DLPRIM_CONV_FP16=1` | fp16 conv inner loop | 2,987 | 3.80× |
 | T4 (Colab) | fp32 | 2,294 | 2.9× |
 | T4 (Colab) | amp | 4,441 | 5.7× |
 | A100 (Colab) | fp32 | 7,377 | 9.4× |
@@ -104,41 +114,47 @@ do at all.
 | --- | --- | ---: | ---: |
 | **BC-250, 40 CU** | **fp32** | **3,892** | **1.0×** |
 | BC-250, 40 CU @ 2.0 GHz | fp32 | 4,489 | 1.15× |
+| **BC-250, 40 CU @ 2.0 GHz, fixed** | **fp32** | **7,064** | **1.81×** |
+| BC-250, same, `DLPRIM_CONV_FP16=1` | fp16 conv inner loop | 10,279 | 2.64× |
 | T4 (Colab) | fp32 | 7,217 | 1.9× |
 | T4 (Colab) | amp | 7,355 | 1.9× |
 | A100 (Colab) | amp | 49,612 | 13× |
 
-Four things stand out.
+Three things stand out.
 
 **Accuracy lands in the same place everywhere** — 0.922 to 0.927 across
 every platform. The OpenCL stack is numerically correct, which is the
 result that matters most.
 
-**The gap is software, not silicon.** At 40 CUs and ~1.5 GHz the BC-250 is
-theoretically a ~7.7 TFLOP/s FP32 part against a T4's 8.1 — genuinely
-T4-class hardware. It delivers roughly a third of a T4's training
-throughput. That difference is kernel quality and maturity.
-
-**Neither of the BC250 unlocks scales linearly.** Going 24 → 40 CUs
+**Neither of the BC-250 unlocks scales linearly.** Going 24 → 40 CUs
 bought 1.48× for 1.67× the cores; 1.5 → 2.0 GHz bought 1.17× for 1.33×
 the clock. Still, the two unlocks together are worth 1.73× over the
 stock 24 CU config, which is free performance.
 
-**Inference is the sweet spot.** At 1.9× behind a T4 — 1.6× overclocked —
-the board is
-perfectly respectable for serving. Training is where immature kernels and
-the total absence of mixed precision hurt most.
+**The initially observed gap to the cloud T4 was mostly software, not silicon.**
+At 40 CUs and 2.0 GHz the BC-250 is theoretically a ~10.2 TFLOP/s FP32
+part — on paper ahead of a T4's 8.1. For training, the fixes from
+[profiling the OpenCL stack](https://github.com/mxreyer/pytorch-dlprim-gfx1013)
+are worth **~2.2×** (919 → 2,055) at fp32
+and **~3.3×** with the fp16 conv inner loop, reducing the fp32 training
+gap against the T4 to ~1.12×. The inference gap between the BC-250 with
+40 CUs @ 2.0 GHz and the T4 was ~1.6×; the software fixes moved this to
+**within 2%**.
 
 ## Verdict
 
 For surplus mining hardware running on a driver stack nobody intended for
-compute, roughly one-third of a cloud T4 in training and half of one in
-inference is a good outcome — and it came down to one build flag. The
-host-side unlocks add another 17% on top.
+compute, landing within 12% of a cloud T4 in training and within 2% in
+inference is a good outcome. Getting it to run at all came down to one
+build flag; getting it there took profiling the OpenCL stack and fixing
+what the profile found — the host-side unlocks were worth 1.73×, the
+software fixes another 2.2× on top.
 
-It is not a cloud GPU replacement. There is no mixed precision, no tensor
-cores, and a maturing kernel library. If you need to train fast, rent an
-A100 — it is 24× quicker.
+It is not a cloud GPU replacement. There are no tensor cores and no
+autocast — the fp16 convolution mode is the nearest thing, and it is
+opt-in for a reason — and the kernel library is still maturing. If you
+need to train fast, rent an A100 — it is 9× quicker with mixed precision,
+3.6× at fp32.
 
 What it *is* very good at is being **always-on and yours**. No session
 limits, no idle timeouts disconnecting you, no per-hour meter, no upload
@@ -148,6 +164,9 @@ available 16 GB GPU under your desk beats a faster one you have to keep
 re-renting.
 
 ---
+
+Profiling and fixing the OpenCL stack:
+[mxreyer/pytorch-dlprim-gfx1013](https://github.com/mxreyer/pytorch-dlprim-gfx1013).
 
 Full walkthrough, manifests, and the benchmark harness:
 [TUTORIAL.md](TUTORIAL.md) · [BENCHMARK.md](BENCHMARK.md) ·

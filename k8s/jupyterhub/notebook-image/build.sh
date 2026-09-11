@@ -5,13 +5,12 @@ set -euo pipefail
 cd "$(dirname "$0")"
 
 IMAGE=bc250-notebook:latest
+# Fedora release of the base image. Defaults to the Dockerfile's default (45);
+# FEDORA_VERSION=44 ./build.sh gets the previous one back.
+BUILD_ARGS=()
+[ -n "${FEDORA_VERSION:-}" ] && BUILD_ARGS+=(--build-arg "FEDORA_VERSION=$FEDORA_VERSION")
 
-# The patched extension lives outside this build context (../../../pytorch-dlprim-fix/).
-# Copy it in for the COPY instruction, remove it again on exit.
-cp ../../../pytorch-dlprim-fix/pt_ocl.so ./pt_ocl.so
-trap 'rm -f ./pt_ocl.so' EXIT
-
-sudo docker build -t "$IMAGE" .
+sudo docker build "${BUILD_ARGS[@]}" -t "$IMAGE" .
 
 # k3s runs its OWN containerd, separate from the Docker daemon. An image built
 # by Docker is not visible to k3s until it's imported. `docker save | k3s ctr

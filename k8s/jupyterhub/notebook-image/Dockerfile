@@ -1,16 +1,25 @@
 # Notebook image for the BC-250.
 #
-# Base is Fedora 44 on purpose: the OpenCL path (Mesa rusticl on radeonsi) is
-# recent-Mesa-only, and building it here from the SAME distro/version as the
-# host (Mesa 26.1.8) sidesteps every library-mismatch problem. The host kernel
-# driver (amdgpu) is what the container's Mesa talks to through
-# /dev/dri/renderD128, so the userspace versions need to line up.
-FROM registry.fedoraproject.org/fedora:44
+# Base is Fedora because the OpenCL path (Mesa rusticl on radeonsi) is
+# recent-Mesa-only and Fedora tracks Mesa closely. The only thing the container
+# shares with the host is the amdgpu kernel driver behind /dev/dri/renderD128,
+# and that interface is stable across Mesa minors, so the container's Fedora
+# does not have to match the host's (host: 44). Measured 2026-09-10, both on
+# the same host kernel:
+#   44 -> Mesa 26.1.8: fma() is a software emulation
+#   45 -> Mesa 26.2.2: fma() is the hardware instruction; training and
+#         inference within run-to-run noise of 44; correct on both (0 bad / 300
+#         sweeps of wino-repro.py with the shipped default).
+# Measurements: OPENCL-PERF.md in https://github.com/mxreyer/pytorch-dlprim-gfx1013.
+# Override at build time: FEDORA_VERSION=44 ./build.sh
+ARG FEDORA_VERSION=45
+FROM registry.fedoraproject.org/fedora:${FEDORA_VERSION}
 
 # OpenCL userspace:
 #   mesa-libOpenCL   - rusticl (libRusticlOpenCL.so) + its ICD registration
 #   mesa-dri-drivers - the radeonsi gallium driver rusticl runs on top of
-#   libclc           - OpenCL built-in function library rusticl needs
+#   libclc           - OpenCL built-in function library rusticl needs (its
+#                      SPIR-V half is replaced with Mesa's fork two steps down)
 #   ocl-icd          - the ICD loader clinfo / pytorch_ocl link against
 #   clinfo           - so we can check the device from inside the container
 RUN dnf -y install --setopt=install_weak_deps=False \
@@ -18,6 +27,31 @@ RUN dnf -y install --setopt=install_weak_deps=False \
         python3.12 python3.12-devel \
         procps-ng findutils which tar gzip \
  && dnf clean all
+
+# Replace Fedora's libclc SPIR-V library with Mesa's maintained fork.
+#
+# rusticl loads /usr/lib64/clc/spirv64-mesa3d-.spv (path baked in at Mesa build
+# time, no override) and links every kernel against it. Fedora's libclc-spirv
+# 22.1.8 (both -1.fc44 and -2.fc45 - byte-identical .spv) has an EMPTY body for
+# __clc_flush_denormal_if_not_supported, so any kernel that reaches it fails to
+# build with "Internal compilation error: nir_shader not fully linked". That is
+# every float sin()/cos()/tan()/sincos() and remquo() (plus fma() on Mesa
+# 26.1) - which in PyTorch terms is torch.randn / .normal_() / nn.init.normal_()
+# on the device (dlprimitives' Box-Muller uses sin/cos). It is also what prints
+# the "Patched Mesa libclc not detected" warning on every run.
+#
+# Mesa's fork fixes exactly that (commit 60e591d "mark
+# __clc_flush_denormal_if_not_supported as static inline") and ships pre-built
+# drop-in binaries per release. Same LLVM 22.1.8 that Fedora 44 and 45 ship,
+# so nothing else changes. Pinned by URL and sha256; ADD from a URL creates the
+# file 0600, hence --chmod. See OPENCL-PERF.md, Finding 8, in
+# https://github.com/mxreyer/pytorch-dlprim-gfx1013.
+ARG MESA_LIBCLC_VER=22.1.8.3
+ARG MESA_LIBCLC_URL=https://gitlab.freedesktop.org/api/v4/projects/27606/packages/generic/mesa-libclc/${MESA_LIBCLC_VER}
+ADD --chmod=0644 --checksum=sha256:728cdfa747a1857829c104291984964971783a301a62e9468a3d5a4f1750c949 \
+    ${MESA_LIBCLC_URL}/spirv64-mesa3d-.spv /usr/lib64/clc/spirv64-mesa3d-.spv
+ADD --chmod=0644 --checksum=sha256:59552f9e22ec221061e9939fc90a46e4159d1400b2e1f85eff46924489d532aa \
+    ${MESA_LIBCLC_URL}/spirv-mesa3d-.spv   /usr/lib64/clc/spirv-mesa3d-.spv
 
 # Just an unprivileged user to run the notebook. Access to /dev/dri/renderD128
 # is granted at runtime by adding the host's "render" GID (105) as a numeric
@@ -47,9 +81,16 @@ RUN python3.12 -m venv $VENV \
 # with the Hub and accepts Hub-issued auth. The `jupyter lab` CMD is only a
 # fallback for running the image by hand (the smoke test in README.md).
 
-# Swap the stock pt_ocl.so for the patched (CUSTOM_REDUCE=1) rebuild.
-# build.sh copies this file into the build context first.
-COPY pt_ocl.so /tmp/pt_ocl.so
+# Swap the stock pt_ocl.so for the patched rebuild from
+# https://github.com/mxreyer/pytorch-dlprim-gfx1013: CUSTOM_REDUCE=1 (needed to compile at
+# all on rusticl) plus the Winograd performance work (909 -> 2,055 img/s) and
+# the half-tensor fixes. Fetched from that repo's GitHub release, pinned by
+# URL + sha256 like the libclc above. To bump: new release there, then update
+# both ARGs here (`sha256sum pt_ocl.so`) and rebuild.
+ARG PT_OCL_VER=v1.0.0
+ARG PT_OCL_URL=https://github.com/mxreyer/pytorch-dlprim-gfx1013/releases/download/${PT_OCL_VER}/pt_ocl.so
+ARG PT_OCL_SHA256=6c44c6344426caeaaa261db9cbac02ca9bf50515ed45280c485b8d27a4ec9429
+ADD --chmod=0644 --checksum=sha256:${PT_OCL_SHA256} ${PT_OCL_URL} /tmp/pt_ocl.so
 RUN install -m0644 /tmp/pt_ocl.so \
       "$VENV/lib/python3.12/site-packages/pytorch_ocl/pt_ocl.so" \
  && rm /tmp/pt_ocl.so \

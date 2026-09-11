@@ -4,7 +4,10 @@
   box (PyTorch through OpenCL) that serves JupyterHub notebooks from a
   single-node Kubernetes (k3s) cluster on the same machine.
 - Remote access and HTTPS is handled via **Tailscale** as an in-pod sidecar.
-- Compare your box with a cross-platform [**benchmark**](BENCHMARK.md) vs. CUDA cloud GPUs.
+- Compare your box with a cross-platform [**benchmark**](BENCHMARK.md)
+  vs. CUDA cloud GPUs; [profiling and fixing the driver
+  stack](https://github.com/mxreyer/pytorch-dlprim-gfx1013) bought us
+  **2.26× on training** and 1.57× on inference.
 - **Learn Kubernetes along the way.** This repo contains a walkthrough
   plus every manifest, Dockerfile, and helper script. It is explicitly for
   learning, **not a production reference**.
@@ -65,10 +68,16 @@ exposing the GPU to a pod is a plain device request.
 This uses a patched version of `pytorch_ocl` from
 [artyom-beilis/pytorch_dlprim](https://github.com/artyom-beilis/pytorch_dlprim).
 
-Trade-off: Performance well below native CUDA/ROCm. See
-[BENCHMARK.md](BENCHMARK.md) — roughly 3× slower than a cloud T4 in
-FP32 and ~5–6× against a T4 running mixed precision. The point is
-that it *works* on hardware ROCm refuses.
+Initially, we found performance well below what the silicon should
+deliver. See [BENCHMARK.md](BENCHMARK.md) — in FP32, training ResNet-9 on
+CIFAR-10 at 40 CUs / 2.0 GHz ran roughly 2.5× slower than on a cloud T4
+(which it matches on paper);
+[profiling and fixing the OpenCL stack in a separate
+repo](https://github.com/mxreyer/pytorch-dlprim-gfx1013) narrowed that gap
+to 1.12× (training) and 1.02× (inference).
+
+**Bottom line: not only did we get PyTorch working on hardware ROCm
+refuses, we also made it performant.**
 
 ## Prerequisites
 
@@ -107,13 +116,13 @@ Full detail in [TUTORIAL.md](TUTORIAL.md). Stages:
 | [BLOG.md](BLOG.md) | Short write-up: objectives, cornerstones, benchmark results, verdict. Start here. |
 | [TUTORIAL.md](TUTORIAL.md) | End-to-end walkthrough. Stages 1-4. |
 | [BENCHMARK.md](BENCHMARK.md) | Workload rationale, protocol, results vs cloud GPUs, and how to run it anywhere. |
+| [pytorch-dlprim-gfx1013](https://github.com/mxreyer/pytorch-dlprim-gfx1013) | Separate repository: the `pytorch_ocl` patches and build script, the full technical investigation (`OPENCL-PERF.md`), microbenchmarks and correctness sweeps, and its own handoff. The notebook image fetches its `pt_ocl.so` release. |
 | `benchmark.py`, `compare.py` | Benchmark harness (ResNet-9 / CIFAR-10). |
 | `k8s/env.example`, `k8s/render.sh` | Host-specific values + the renderer that turns `k8s/**/*.yaml.tmpl` into manifests you can apply. Run `./k8s/render.sh` before the first apply. |
 | `k8s/device-plugin/` | `generic-device-plugin` DaemonSet — advertises `devic.es/dri`. Required for any GPU pod (Stage 4). |
 | `k8s/jupyterhub/` | The whole stack (namespace `jupyterhub`): RBAC, ConfigMap, PVC, Deployment (hub + Tailscale sidecar), Service, Ingress. |
 | `k8s/jupyterhub/image/` | The Hub image: JupyterHub + `kubespawner` + `idle-culler` + `nativeauthenticator`. |
 | `k8s/jupyterhub/notebook-image/` | The `bc250-notebook` image the Hub spawns per user: Fedora + rusticl + torch + patched `pytorch_ocl`. |
-| `pytorch-dlprim-fix/` | The `CUSTOM_REDUCE=1` rebuild of `pytorch_ocl` that makes training ops (softmax, cross-entropy, bias gradients) compile under Fedora's stock rusticl. Patch + build script + a prebuilt `.so`. |
 
 ## License
 

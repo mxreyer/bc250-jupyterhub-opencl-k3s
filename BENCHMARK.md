@@ -12,18 +12,25 @@ BC-250 (OpenCL) and on any CUDA cloud GPU.
 - Fits in <1 GB, so an 8 GB cloud card and the BC-250's 16 GB both run it at
   batch 128.
 - FP32 is the only apples-to-apples precision (the BC-250 has no tensor cores
-  and `pytorch_ocl` has no mixed precision). Cloud cards get a *second* run
-  with `--amp` for their realistic best case.
+  and `pytorch_ocl` has no `autocast`). Cloud cards get a *second* run with
+  `--amp` for their realistic best case. The BC-250's nearest counterpart is
+  `DLPRIM_CONV_FP16=1`: fp16 inside the convolution kernels, fp32 everywhere
+  else. It is narrower than autocast (convolutions only, tensors stay fp32 in
+  memory) and accumulates in fp16, so it is ~10× looser numerically and stays
+  opt-in.
 
-## Results (2026-09-09)
+## Results
 
-BC-250 on `ocl:0` at three configs — 24 CU and 40 CU at the stock ~1.5 GHz,
-and 40 CU with the GPU overclocked to 2.0 GHz; cloud cards from Google Colab.
+BC-250 on `ocl:0` — 24 CU and 40 CU at the stock ~1.5 GHz, 40 CU with the GPU
+overclocked to 2.0 GHz, and that overclock with the software fixes from
+[OPENCL-PERF.md](https://github.com/mxreyer/pytorch-dlprim-gfx1013/blob/main/OPENCL-PERF.md)
+(the `pt_ocl.so` that ships in the notebook image); cloud cards from Google
+Colab.
 The `vs BC-250 40 CU` column is relative to the stock 40 CU config, so the
 overclock reads as a delta against it.
 The extra CUs and the clock are unlocked on the host, outside this repo — see
 [duggasco/bc250-40cu-unlock](https://github.com/duggasco/bc250-40cu-unlock).
-`benchmark.py` is unchanged across all three runs.
+`benchmark.py` is unchanged across every run.
 
 ### Training
 
@@ -33,6 +40,8 @@ The extra CUs and the clock are unlocked on the host, outside this repo — see
 | BC-250, 24 CU | fp32 | 532 | 93.9 | 0.927 | 0.68× |
 | **BC-250, 40 CU** | **fp32** | **786** | **63.6** | **0.923** | **1.0×** |
 | BC-250, 40 CU @ 2.0 GHz | fp32 | 919 | 54.4 | 0.924 | 1.17× |
+| **BC-250, 40 CU @ 2.0 GHz, fixed** | **fp32** | **2,055** | **24.3** | **0.924** | **2.61×** |
+| BC-250, same, `DLPRIM_CONV_FP16=1` | fp16 conv inner loop | 2,987 | 16.7 | 0.926 | 3.80× |
 | T4 (Colab) | fp32 | 2,294 | 21.8 | 0.926 | 2.9× |
 | T4 (Colab) | amp | 4,441 | 11.3 | 0.923 | 5.7× |
 | L4 (Colab) | fp32 | 3,370 | 14.8 | 0.927 | 4.3× |
@@ -50,6 +59,8 @@ The extra CUs and the clock are unlocked on the host, outside this repo — see
 | BC-250, 24 CU | fp32 | 2,586 | 0.66× |
 | **BC-250, 40 CU** | **fp32** | **3,892** | **1.0×** |
 | BC-250, 40 CU @ 2.0 GHz | fp32 | 4,489 | 1.15× |
+| **BC-250, 40 CU @ 2.0 GHz, fixed** | **fp32** | **7,064** | **1.81×** |
+| BC-250, same, `DLPRIM_CONV_FP16=1` | fp16 conv inner loop | 10,279 | 2.64× |
 | T4 (Colab) | fp32 | 7,217 | 1.9× |
 | T4 (Colab) | amp | 7,355 | 1.9× |
 | L4 (Colab) | fp32 | 12,119 | 3.1× |
@@ -60,14 +71,18 @@ The extra CUs and the clock are unlocked on the host, outside this repo — see
 ### Notes
 
 - 24 → 40 CUs scaled 532 → 786 img/s = **1.48× for a 1.67× core bump**
-- 40 CUs @ 1.5 GHz → 40 CUs @ 2.0GHz scaled 786 → 919 img/s = **1.17× for a 1.33× clock bump**
-- Together the two unlocks are worth **1.73× over the 24 CU stock config**.
-- Inference gap between BC-250 @ 40 CUs and T4 is only **~1.9×** (1.6×
-  with the GPU clocked to 2.0 GHz).
+- 40 CUs @ 1.5 GHz → 40 CUs @ 2.0 GHz scaled 786 → 919 img/s = **1.17× for a 1.33× clock bump**
+- For training, the fixes from
+  [our profiling](https://github.com/mxreyer/pytorch-dlprim-gfx1013)
+  are worth **~2.2×** (919 → 2,055) at fp32
+  and **~3.3×** with the fp16 inner loop, reducing the fp32 training
+  gap against the T4 to ~1.12×.
+- Inference gap between BC-250 with 40 CUs @ 2.0 GHz and T4 was ~1.6×;
+  our software fixes moved this to **within 2%**.
 - Accuracy matches everywhere (0.922–0.927): the stack is numerically correct.
-- **The gap is software, not silicon.** @ 40 CUs / ~1.5 GHz the BC-250 is
-  ~7.7 TFLOP/s FP32 → genuinely T4-class *silicon* (8.1). The ~3× FP32 gap
-  is almost entirely **software stack** (kernel quality & maturity).
+- This confirms that the initially observed ~2.5× fp32 gap to the T4 was
+  **software, not silicon.** @ 40 CUs / 2.0 GHz the BC-250 is ~10.2
+  TFLOP/s FP32 on paper — *ahead* of the T4's 8.1.
 
 ---
 

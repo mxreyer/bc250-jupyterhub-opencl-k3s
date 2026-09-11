@@ -9,7 +9,7 @@ The main objective is **learning** Kubernetes by operating something
 real — everything is in plain, readable manifests, not a Helm chart.
 
 The finished layout lives in this repo under `k8s/`. This document is the
-narrative - open the manifests for reference.
+narrative — open the manifests for reference.
 
 ---
 
@@ -86,24 +86,35 @@ Fedora's stock Mesa doesn't provide, so `softmax`, `cross_entropy`, and
 bias gradients fail to compile. `pytorch_dlprim` already contains a
 portable fallback for this; it's just off by default. Rebuild the
 extension with the fallback on (`CUSTOM_REDUCE=1`) and drop the
-resulting `pt_ocl.so` into the venv. The exact patch and a build script
-are in [`pytorch-dlprim-fix/`](https://github.com/mxreyer/bc250-jupyterhub-opencl-k3s/tree/main/pytorch-dlprim-fix).
+resulting `pt_ocl.so` into the venv. The patches and a build script live in a
+separate repository, [pytorch-dlprim-gfx1013](https://github.com/mxreyer/pytorch-dlprim-gfx1013), which also carries the
+performance work on top (2.26× on training). Its
+[releases](https://github.com/mxreyer/pytorch-dlprim-gfx1013/releases) have a prebuilt `pt_ocl.so` — the same file the
+notebook image installs — so the quick route is:
 
 ```bash
-./pytorch-dlprim-fix/build.sh
+curl -fLo pt_ocl.so https://github.com/mxreyer/pytorch-dlprim-gfx1013/releases/download/v1.0.0/pt_ocl.so
+```
+
+Or build it:
+
+```bash
+git clone https://github.com/mxreyer/pytorch-dlprim-gfx1013 ../pytorch-dlprim-gfx1013
+../pytorch-dlprim-gfx1013/build.sh
 ```
 
 The script is self-contained: it builds its *own* throwaway venv under
-`pytorch-dlprim-fix/scratch/` (same torch + `pytorch_ocl` as above), clones
-`pytorch_dlprim`, applies `custom_reduce.patch`, and compiles. Budget ~10
-minutes on the BC-250 — almost all of it the C++ build. It leaves the
-rebuilt extension at `pytorch-dlprim-fix/pt_ocl.so`.
+`scratch/` (same torch + `pytorch_ocl` as above), clones `pytorch_dlprim`,
+applies the patches, and compiles. Budget ~10 minutes on the BC-250 — almost
+all of it the C++ build. It leaves the rebuilt extension at
+`../pytorch-dlprim-gfx1013/pt_ocl.so`.
 
-Copy that over the stock extension in the venv you made above, and delete
-the compiled-kernel cache (it is keyed to the old kernel source):
+Copy it — the downloaded `pt_ocl.so`, or `../pytorch-dlprim-gfx1013/pt_ocl.so`
+from the build — over the stock extension in the venv you made above, and
+delete the compiled-kernel cache (it is keyed to the old kernel source):
 
 ```bash
-cp pytorch-dlprim-fix/pt_ocl.so \
+cp pt_ocl.so \
    bc250-ocl-venv/lib/python3.12/site-packages/pytorch_ocl/pt_ocl.so
 rm -f ~/.dlprimitives/cache.db
 ```
@@ -193,9 +204,10 @@ stores):
 - **`k8s/jupyterhub/image/`** — the Hub: upstream JupyterHub + `kubespawner` +
   `jupyterhub-idle-culler` + `nativeauthenticator`.
 - **`k8s/jupyterhub/notebook-image/`** — the per-user server: **`FROM
-  fedora:44`** (matched to the host so the OpenCL userspace lines up in Stage
-  4), torch 2.4.0 CPU, the patched `pytorch_ocl` from Stage 2, `jupyterlab`,
-  and `jupyterhub` for the `jupyterhub-singleuser` launcher.
+  fedora:45`** (Mesa 26.2 with rusticl, plus Mesa's patched libclc dropped in
+  over Fedora's — see that directory's README), torch 2.4.0 CPU, the patched
+  `pytorch_ocl` from Stage 2, `jupyterlab`, and `jupyterhub` for the
+  `jupyterhub-singleuser` launcher.
 
 ```bash
 k8s/jupyterhub/image/build.sh
@@ -415,14 +427,15 @@ a cell.
 **Goal:** the pods JupyterHub spawns run PyTorch on the BC-250 GPU, and do so
 as ordinary unprivileged pods.
 
-### Why the notebook image is `FROM fedora:44`
+### Why the notebook image is `FROM fedora:45`
 
 The image you built in Stage 3 (`k8s/jupyterhub/notebook-image/`) is already
-GPU-ready: it's built from the **same distro and version as the host** so its
-Mesa userspace (`mesa-libOpenCL`, `mesa-dri-drivers`, `libclc`, `ocl-icd`)
-lines up with the host kernel's `amdgpu`, which is what rusticl talks to
-through `/dev/dri/renderD128`. Nothing to rebuild here — Stage 4 only wires
-the device to it.
+GPU-ready: it carries its own Mesa userspace (`mesa-libOpenCL`,
+`mesa-dri-drivers`, `libclc`, `ocl-icd`), and the only piece it shares with
+the host is the `amdgpu` kernel driver behind `/dev/dri/renderD128`. So the
+container's Fedora does not have to match the host's — Fedora 45's Mesa 26.2
+runs fine on a Fedora 44 kernel, and is what the benchmark numbers were
+measured on. Nothing to rebuild here — Stage 4 only wires the device to it.
 
 ### Handing over the device (`k8s/device-plugin/`)
 
