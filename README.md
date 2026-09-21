@@ -7,7 +7,7 @@
 - Compare your box with a cross-platform [**benchmark**](BENCHMARK.md)
   vs. CUDA cloud GPUs; [profiling and fixing the driver
   stack](https://github.com/mxreyer/pytorch-dlprim-gfx1013) bought us
-  **2.26× on training** and 1.57× on inference.
+  **2.54× on training** and 1.59× on inference.
 - **Learn Kubernetes along the way.** This repo contains a walkthrough
   plus every manifest, Dockerfile, and helper script. It is explicitly for
   learning, **not a production reference**.
@@ -73,8 +73,8 @@ deliver. See [BENCHMARK.md](BENCHMARK.md) — in FP32, training ResNet-9 on
 CIFAR-10 at 40 CUs / 2.0 GHz ran roughly 2.5× slower than on a cloud T4
 (which it matches on paper);
 [profiling and fixing the OpenCL stack in a separate
-repo](https://github.com/mxreyer/pytorch-dlprim-gfx1013) narrowed that gap
-to 1.12× (training) and 1.02× (inference).
+repo](https://github.com/mxreyer/pytorch-dlprim-gfx1013) closed that gap:
+the BC-250 now trains ~2% faster than the T4 and infers within 2% of it.
 
 **Bottom line: not only did we get PyTorch working on hardware ROCm
 refuses, we also made it performant.**

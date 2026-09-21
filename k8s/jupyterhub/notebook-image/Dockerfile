@@ -83,13 +83,13 @@ RUN python3.12 -m venv $VENV \
 
 # Swap the stock pt_ocl.so for the patched rebuild from
 # https://github.com/mxreyer/pytorch-dlprim-gfx1013: CUSTOM_REDUCE=1 (needed to compile at
-# all on rusticl) plus the Winograd performance work (909 -> 2,055 img/s) and
+# all on rusticl) plus the Winograd performance work (919 -> 2,337 img/s) and
 # the half-tensor fixes. Fetched from that repo's GitHub release, pinned by
 # URL + sha256 like the libclc above. To bump: new release there, then update
 # both ARGs here (`sha256sum pt_ocl.so`) and rebuild.
-ARG PT_OCL_VER=v1.0.0
+ARG PT_OCL_VER=v1.1.0
 ARG PT_OCL_URL=https://github.com/mxreyer/pytorch-dlprim-gfx1013/releases/download/${PT_OCL_VER}/pt_ocl.so
-ARG PT_OCL_SHA256=6c44c6344426caeaaa261db9cbac02ca9bf50515ed45280c485b8d27a4ec9429
+ARG PT_OCL_SHA256=96dfc11d0e19c9580354991431fdc0fafc6721ccc3b5ff4e2b912a9237d44b27
 ADD --chmod=0644 --checksum=sha256:${PT_OCL_SHA256} ${PT_OCL_URL} /tmp/pt_ocl.so
 RUN install -m0644 /tmp/pt_ocl.so \
       "$VENV/lib/python3.12/site-packages/pytorch_ocl/pt_ocl.so" \

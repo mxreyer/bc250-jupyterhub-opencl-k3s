@@ -40,8 +40,8 @@ The extra CUs and the clock are unlocked on the host, outside this repo — see
 | BC-250, 24 CU | fp32 | 532 | 93.9 | 0.927 | 0.68× |
 | **BC-250, 40 CU** | **fp32** | **786** | **63.6** | **0.923** | **1.0×** |
 | BC-250, 40 CU @ 2.0 GHz | fp32 | 919 | 54.4 | 0.924 | 1.17× |
-| **BC-250, 40 CU @ 2.0 GHz, fixed** | **fp32** | **2,055** | **24.3** | **0.924** | **2.61×** |
-| BC-250, same, `DLPRIM_CONV_FP16=1` | fp16 conv inner loop | 2,987 | 16.7 | 0.926 | 3.80× |
+| **BC-250, 40 CU @ 2.0 GHz, fixed** | **fp32** | **2,337** | **21.4** | **0.924** | **2.97×** |
+| BC-250, same, `DLPRIM_CONV_FP16=1` | fp16 conv inner loop | 2,992 | 16.7 | 0.926 | 3.81× |
 | T4 (Colab) | fp32 | 2,294 | 21.8 | 0.926 | 2.9× |
 | T4 (Colab) | amp | 4,441 | 11.3 | 0.923 | 5.7× |
 | L4 (Colab) | fp32 | 3,370 | 14.8 | 0.927 | 4.3× |
@@ -59,8 +59,8 @@ The extra CUs and the clock are unlocked on the host, outside this repo — see
 | BC-250, 24 CU | fp32 | 2,586 | 0.66× |
 | **BC-250, 40 CU** | **fp32** | **3,892** | **1.0×** |
 | BC-250, 40 CU @ 2.0 GHz | fp32 | 4,489 | 1.15× |
-| **BC-250, 40 CU @ 2.0 GHz, fixed** | **fp32** | **7,064** | **1.81×** |
-| BC-250, same, `DLPRIM_CONV_FP16=1` | fp16 conv inner loop | 10,279 | 2.64× |
+| **BC-250, 40 CU @ 2.0 GHz, fixed** | **fp32** | **7,130** | **1.83×** |
+| BC-250, same, `DLPRIM_CONV_FP16=1` | fp16 conv inner loop | 10,508 | 2.70× |
 | T4 (Colab) | fp32 | 7,217 | 1.9× |
 | T4 (Colab) | amp | 7,355 | 1.9× |
 | L4 (Colab) | fp32 | 12,119 | 3.1× |
@@ -74,11 +74,11 @@ The extra CUs and the clock are unlocked on the host, outside this repo — see
 - 40 CUs @ 1.5 GHz → 40 CUs @ 2.0 GHz scaled 786 → 919 img/s = **1.17× for a 1.33× clock bump**
 - For training, the fixes from
   [our profiling](https://github.com/mxreyer/pytorch-dlprim-gfx1013)
-  are worth **~2.2×** (919 → 2,055) at fp32
-  and **~3.3×** with the fp16 inner loop, reducing the fp32 training
-  gap against the T4 to ~1.12×.
+  are worth **~2.5×** (919 → 2,337) at fp32
+  and **~3.3×** with the fp16 inner loop (2,992), which closes the fp32
+  training gap against the T4: 2,337 vs 2,294 img/s, the BC-250 ~2% ahead.
 - Inference gap between BC-250 with 40 CUs @ 2.0 GHz and T4 was ~1.6×;
-  our software fixes moved this to **within 2%**.
+  our software fixes moved this to **within 2%** (7,130 vs 7,217).
 - Accuracy matches everywhere (0.922–0.927): the stack is numerically correct.
 - This confirms that the initially observed ~2.5× fp32 gap to the T4 was
   **software, not silicon.** @ 40 CUs / 2.0 GHz the BC-250 is ~10.2

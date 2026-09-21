@@ -88,12 +88,12 @@ portable fallback for this; it's just off by default. Rebuild the
 extension with the fallback on (`CUSTOM_REDUCE=1`) and drop the
 resulting `pt_ocl.so` into the venv. The patches and a build script live in a
 separate repository, [pytorch-dlprim-gfx1013](https://github.com/mxreyer/pytorch-dlprim-gfx1013), which also carries the
-performance work on top (2.26× on training). Its
+performance work on top (2.54× on training). Its
 [releases](https://github.com/mxreyer/pytorch-dlprim-gfx1013/releases) have a prebuilt `pt_ocl.so` — the same file the
 notebook image installs — so the quick route is:
 
 ```bash
-curl -fLo pt_ocl.so https://github.com/mxreyer/pytorch-dlprim-gfx1013/releases/download/v1.0.0/pt_ocl.so
+curl -fLo pt_ocl.so https://github.com/mxreyer/pytorch-dlprim-gfx1013/releases/download/v1.1.0/pt_ocl.so
 ```
 
 Or build it:

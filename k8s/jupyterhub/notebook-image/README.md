@@ -57,8 +57,8 @@ that catches the libclc problem specifically.
 
 `DLPRIM_CONV_FP16=1` in a pod's environment (or `os.environ[...]` at the very
 top of a notebook, before the first convolution runs) switches the Winograd
-convolution kernels to an fp16 inner loop: ~1.5× on ResNet-style training and
-inference at ~0.5% numerical error, accuracy unchanged over 16 epochs. Off by
+convolution kernels to an fp16 inner loop: ~1.3× on ResNet-style training and
+~1.5× on inference at ~0.5% numerical error, accuracy unchanged over 16 epochs. Off by
 default; details in [OPENCL-PERF.md](https://github.com/mxreyer/pytorch-dlprim-gfx1013/blob/main/OPENCL-PERF.md), Finding 11. To make it the
 default for every user, add it next to `RUSTICL_ENABLE` in
 `c.KubeSpawner.environment` in `../30-configmap.yaml.tmpl`.

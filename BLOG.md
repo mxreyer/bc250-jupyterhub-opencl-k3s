@@ -15,8 +15,8 @@ to OpenCL through a [third-party backend](https://github.com/artyom-beilis/pytor
 I wanted to know how far you could push one anyway. The answer turned into
 a small ML server: JupyterHub on Kubernetes, GPU-accelerated PyTorch,
 multiple users, remote access over HTTPS.
-Besides that, I managed to push ML training performance by more than
-100% by profiling and fixing the OpenCL stack.
+Besides that, I managed to push ML training performance by 2.5× by
+profiling and fixing the OpenCL stack.
 
 ## Objectives
 
@@ -101,8 +101,8 @@ fp32 everywhere else.
 | BC-250, 24 CU | fp32 | 532 | 0.68× |
 | **BC-250, 40 CU** | **fp32** | **786** | **1.0×** |
 | BC-250, 40 CU @ 2.0 GHz | fp32 | 919 | 1.17× |
-| **BC-250, 40 CU @ 2.0 GHz, fixed** | **fp32** | **2,055** | **2.61×** |
-| BC-250, same, `DLPRIM_CONV_FP16=1` | fp16 conv inner loop | 2,987 | 3.80× |
+| **BC-250, 40 CU @ 2.0 GHz, fixed** | **fp32** | **2,337** | **2.97×** |
+| BC-250, same, `DLPRIM_CONV_FP16=1` | fp16 conv inner loop | 2,992 | 3.81× |
 | T4 (Colab) | fp32 | 2,294 | 2.9× |
 | T4 (Colab) | amp | 4,441 | 5.7× |
 | A100 (Colab) | fp32 | 7,377 | 9.4× |
@@ -114,8 +114,8 @@ fp32 everywhere else.
 | --- | --- | ---: | ---: |
 | **BC-250, 40 CU** | **fp32** | **3,892** | **1.0×** |
 | BC-250, 40 CU @ 2.0 GHz | fp32 | 4,489 | 1.15× |
-| **BC-250, 40 CU @ 2.0 GHz, fixed** | **fp32** | **7,064** | **1.81×** |
-| BC-250, same, `DLPRIM_CONV_FP16=1` | fp16 conv inner loop | 10,279 | 2.64× |
+| **BC-250, 40 CU @ 2.0 GHz, fixed** | **fp32** | **7,130** | **1.83×** |
+| BC-250, same, `DLPRIM_CONV_FP16=1` | fp16 conv inner loop | 10,508 | 2.70× |
 | T4 (Colab) | fp32 | 7,217 | 1.9× |
 | T4 (Colab) | amp | 7,355 | 1.9× |
 | A100 (Colab) | amp | 49,612 | 13× |
@@ -131,30 +131,30 @@ bought 1.48× for 1.67× the cores; 1.5 → 2.0 GHz bought 1.17× for 1.33×
 the clock. Still, the two unlocks together are worth 1.73× over the
 stock 24 CU config, which is free performance.
 
-**The initially observed gap to the cloud T4 was mostly software, not silicon.**
+**The initially observed gap to the cloud T4 was software, not silicon.**
 At 40 CUs and 2.0 GHz the BC-250 is theoretically a ~10.2 TFLOP/s FP32
 part — on paper ahead of a T4's 8.1. For training, the fixes from
 [profiling the OpenCL stack](https://github.com/mxreyer/pytorch-dlprim-gfx1013)
-are worth **~2.2×** (919 → 2,055) at fp32
-and **~3.3×** with the fp16 conv inner loop, reducing the fp32 training
-gap against the T4 to ~1.12×. The inference gap between the BC-250 with
-40 CUs @ 2.0 GHz and the T4 was ~1.6×; the software fixes moved this to
-**within 2%**.
+are worth **~2.5×** (919 → 2,337) at fp32
+and **~3.3×** with the fp16 conv inner loop, which closes the fp32
+training gap against the T4 outright: 2,337 vs 2,294 img/s. The inference
+gap between the BC-250 with 40 CUs @ 2.0 GHz and the T4 was ~1.6×; the
+software fixes moved this to **within 2%**.
 
 ## Verdict
 
 For surplus mining hardware running on a driver stack nobody intended for
-compute, landing within 12% of a cloud T4 in training and within 2% in
-inference is a good outcome. Getting it to run at all came down to one
+compute, matching a cloud T4 in fp32 training and landing within 2% of it
+in inference is a good outcome. Getting it to run at all came down to one
 build flag; getting it there took profiling the OpenCL stack and fixing
 what the profile found — the host-side unlocks were worth 1.73×, the
-software fixes another 2.2× on top.
+software fixes another 2.5× on top.
 
 It is not a cloud GPU replacement. There are no tensor cores and no
 autocast — the fp16 convolution mode is the nearest thing, and it is
 opt-in for a reason — and the kernel library is still maturing. If you
-need to train fast, rent an A100 — it is 9× quicker with mixed precision,
-3.6× at fp32.
+need to train fast, rent an A100 — it is 8× quicker with mixed precision,
+3.2× at fp32.
 
 What it *is* very good at is being **always-on and yours**. No session
 limits, no idle timeouts disconnecting you, no per-hour meter, no upload
