@@ -93,7 +93,7 @@ performance work on top (2.54× on training). Its
 notebook image installs — so the quick route is:
 
 ```bash
-curl -fLo pt_ocl.so https://github.com/mxreyer/pytorch-dlprim-gfx1013/releases/download/v1.1.0/pt_ocl.so
+curl -fLo pt_ocl.so https://github.com/mxreyer/pytorch-dlprim-gfx1013/releases/download/v1.2.0/pt_ocl.so
 ```
 
 Or build it:
