@@ -22,16 +22,16 @@
                     AsRock BC-250  ·  Fedora 44  ·  amdgpu  ·  Mesa rusticl on radeonsi
  ┌───────────────────────────────────────────────────────────────────────────────────────┐
  │                                                                                       │
- │   LAN  ──HTTP──▶  Traefik (:80)  ──Ingress──▶  Service  ──┐                           │
- │   (sslip.io)                                              │                           │
- │                                                           ▼                           │
- │                                              ┌──────────────────────────┐             │
- │   tailnet ──HTTPS(:443)──▶  tailscale  ──────▶  hub pod                 │             │
- │   (Serve, real cert)        sidecar          │   jupyterhub + proxy     │             │
- │                          (in the hub pod)    │   + idle-culler          │             │
- │                                              │   KubeSpawner ──────┐    │             │
- │                                              └─────────────────────┼────┘             │
- │                                 ┌──────────────────────────────────┘                  │
+ │   LAN  ──HTTP──▶  Traefik (:80)  ──Ingress──▶  Service  ──┐                         │
+ │   (sslip.io)                                                │                         │
+ │                                                             ▼                         │
+ │                                                ┌──────────────────────────┐           │
+ │   tailnet ──HTTPS(:443)──▶  tailscale  ──────▶  hub pod                 │           │
+ │   (Serve, real cert)        sidecar            │   jupyterhub + proxy     │           │
+ │                          (in the hub pod)      │   + idle-culler          │           │
+ │                                                │   KubeSpawner ──────┐    │           │
+ │                                                └─────────────────────┼────┘           │
+ │                                 ┌────────────────────────────────────┘                │
  │                                 │   via RBAC (Role, namespaced)                       │
  │                                 ▼                                                     │
  │                     ┌────────────────────────┐                                        │
@@ -43,7 +43,7 @@
  │                                 ▼                                                     │
  │                   generic-device-plugin (DaemonSet)                                   │
  │                                 ▼                                                     │
- │                   /dev/dri/renderD128  ──▶  GPU (gfx1013)                             │
+ │                   /dev/dri/renderD128  ──▶  GPU (gfx1013)                            │
  │                                                                                       │
  │   k3s bundled: CoreDNS · Traefik · local-path provisioner · metrics-server            │
  └───────────────────────────────────────────────────────────────────────────────────────┘
