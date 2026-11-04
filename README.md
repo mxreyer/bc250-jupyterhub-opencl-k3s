@@ -7,7 +7,7 @@
 - Remote access and HTTPS is handled via **Tailscale** as an in-pod sidecar.
 - Compare your box with a cross-platform [benchmark](BENCHMARK.md)
   vs. CUDA cloud GPUs; [profiling and fixing the driver
-  stack](https://github.com/mxreyer/pytorch-dlprim-gfx1013 in a different repo) bought us
+  stack in a separate repo](https://github.com/mxreyer/pytorch-dlprim-gfx1013) bought us
   **2.54× on training** and 1.59× on inference.
 - **Learn Kubernetes along the way.** This repo contains a walkthrough
   plus every manifest, Dockerfile, and helper script. It is explicitly for
