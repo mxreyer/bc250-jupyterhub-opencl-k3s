@@ -12,9 +12,9 @@
   plus every manifest, Dockerfile, and helper script. It is explicitly for
   learning, **not a production reference**.
 
-> Want a summary? Read [**BLOG.md**](BLOG.md)!
+> For a summary ➡️ [**BLOG.md**](BLOG.md)
 
-> Want to set it up yourself? Read [**TUTORIAL.md**](TUTORIAL.md)!
+> Detailed instructions for setting it up ➡️ [**TUTORIAL.md**](TUTORIAL.md)!
 
 ## Architecture, end to end
 
