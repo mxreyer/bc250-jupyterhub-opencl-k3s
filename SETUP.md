@@ -451,11 +451,6 @@ sudo kubectl -n jupyterhub exec jupyter-<user> -- python /tmp/gpu-check.py
 sudo systemctl restart k3s
 ```
 
-- Comparing the board against cloud GPUs: the benchmark in
-  [pytorch-gpu-bc250](https://github.com/mxreyer/pytorch-gpu-bc250/blob/main/BENCHMARK.md)
-  (`benchmark.py` runs the same ResNet-9/CIFAR-10 workload on `ocl:0`, `cuda`,
-  or `cpu`, and its "through JupyterHub" section runs it inside a user pod)
-
 ---
 
 *Co-authored with [Claude Code](https://claude.com/claude-code) (Claude Opus 5).*
