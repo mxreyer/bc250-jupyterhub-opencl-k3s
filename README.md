@@ -63,7 +63,9 @@ There is a **write-up** of the whole project: [From mining board to multi-user M
 gfx1013 is not an officially supported ROCm target, so PyTorch reaches the
 GPU through **rusticl** (Mesa's OpenCL implementation) and a patched
 [`pytorch_ocl`](https://github.com/artyom-beilis/pytorch_dlprim); how and
-why is in [pytorch-gpu-bc250](https://github.com/mxreyer/pytorch-gpu-bc250). For the
+why is in [pytorch-gpu-bc250](https://github.com/mxreyer/pytorch-gpu-bc250),
+the patches are documented in [pytorch-dlprim-gfx1013](https://github.com/mxreyer/pytorch-dlprim-gfx1013).
+For the
 Kubernetes side this is a simplification: the OpenCL path needs only the DRI
 render node, so exposing the GPU to a pod is a plain device request.
 
