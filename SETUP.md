@@ -92,61 +92,15 @@ k8s/jupyterhub/notebook-image/build.sh
 
 Neither image is in a registry, so the manifests set `imagePullPolicy: Never`.
 
-### Host-specific values
-
-The committed manifests carry `${NODE_LAN_IP}` / `${TS_*}` / `${HUB_ADMIN}`
-placeholders. Once, before applying anything:
-
-```bash
-cp k8s/env.example k8s/env.local     # then edit env.local
-./k8s/render.sh                       # writes the real k8s/**/<name>.yaml
-```
-
-### Namespace
-
-```bash
-sudo kubectl apply -f k8s/jupyterhub/00-namespace.yaml
-```
-
-### Secrets
-
-The Secret is never committed; `20-secret.example.txt` documents the keys:
-
-```bash
-sudo kubectl -n jupyterhub create secret generic hub-secrets \
-  --from-literal=CONFIGPROXY_AUTH_TOKEN=$(openssl rand -hex 32) \
-  --from-literal=JUPYTERHUB_CRYPT_KEY=$(openssl rand -hex 32)
-```
-
-The `tailscale` sidecar in `50-deployment.yaml` also needs a `tailscale-auth`
-Secret before you apply anything else. Kubernetes only adds a pod to a
-Service's endpoints once **every** container in it is Ready — so until this
-Secret exists, the `tailscale` container sits in `CreateContainerConfigError`,
-the Hub pod never reaches `Ready`, and Traefik returns a bare `503` for
-everyone, not just a degraded sidecar. Grab an auth key from [Settings →
-Keys](https://login.tailscale.com/admin/settings/keys) → *Generate auth key*
-(a `tskey-auth-...` string) and create the Secret now:
-
-```bash
-sudo kubectl -n jupyterhub create secret generic tailscale-auth \
-  --from-literal=authkey=tskey-auth-XXXXXXXX
-```
-
-(`34-tailscale-auth.example.txt` documents the same command, for reference —
-don't apply that file itself. See the Tailscale section below for what this
-Secret is used for.) If you'd rather skip Tailscale for now, comment out the
-`tailscale` container block in `50-deployment.yaml.tmpl` (then re-run
-`./k8s/render.sh`) instead — the Hub itself doesn't need it.
-
 ### The objects (`k8s/jupyterhub/`)
 
 | File | Kind | Purpose |
 | ---- | ---- | ------- |
 | `00-namespace.yaml` | Namespace | `jupyterhub` — holds the Hub *and* every spawned user pod |
 | `10-rbac.yaml` | ServiceAccount + Role + RoleBinding | let the Hub drive the k8s API — **in this namespace only** |
-| `20-secret.example.txt` | *(doc only)* | documents the `hub-secrets` keys — the real Secret is hand-created above, never committed |
+| `20-secret.example.txt` | *(doc only)* | documents the `hub-secrets` keys — the real Secret is hand-created below, never committed |
 | `30-configmap.yaml` | ConfigMap | the entire `jupyterhub_config.py` |
-| `34-tailscale-auth.example.txt` | *(doc only)* | documents the `tailscale-auth` Secret command — the real Secret is hand-created above, never committed |
+| `34-tailscale-auth.example.txt` | *(doc only)* | documents the `tailscale-auth` Secret command — the real Secret is hand-created below, never committed |
 | `35-tailscale-serve.yaml` | ConfigMap | `serve.json` for the Tailscale sidecar — tailnet `:443` → `127.0.0.1:8000` |
 | `40-pvc.yaml` | PVC | the Hub's SQLite state — user table *and* NativeAuthenticator credentials |
 | `50-deployment.yaml` | Deployment | one Hub pod: JupyterHub + its HTTP proxy + the culler + the Tailscale sidecar |
@@ -219,6 +173,53 @@ Secret is used for.) If you'd rather skip Tailscale for now, comment out the
   `c.JupyterHub.public_url = "https://…ts.net/"` in the ConfigMap — without it
   the Hub sees plain HTTP from the sidecar, emits `http://` redirects, and the
   login loops.
+
+### Host-specific values
+
+The committed manifests carry `${NODE_LAN_IP}` / `${TS_*}` / `${HUB_ADMIN}`
+placeholders. Once, before applying anything:
+
+```bash
+cp k8s/env.example k8s/env.local     # then edit env.local
+./k8s/render.sh                       # writes the real k8s/**/<name>.yaml
+```
+
+### Namespace
+
+```bash
+sudo kubectl apply -f k8s/jupyterhub/00-namespace.yaml
+```
+
+### Secrets
+
+The Secret is never committed; `20-secret.example.txt` documents the keys:
+
+```bash
+sudo kubectl -n jupyterhub create secret generic hub-secrets \
+  --from-literal=CONFIGPROXY_AUTH_TOKEN=$(openssl rand -hex 32) \
+  --from-literal=JUPYTERHUB_CRYPT_KEY=$(openssl rand -hex 32)
+```
+
+The `tailscale` sidecar in `50-deployment.yaml` also needs a `tailscale-auth`
+Secret before you apply anything else. Kubernetes only adds a pod to a
+Service's endpoints once **every** container in it is Ready — so until this
+Secret exists, the `tailscale` container sits in `CreateContainerConfigError`,
+the Hub pod never reaches `Ready`, and Traefik returns a bare `503` for
+everyone, not just a degraded sidecar. Grab an auth key from [Settings →
+Keys](https://login.tailscale.com/admin/settings/keys) → *Generate auth key*
+(a `tskey-auth-...` string) and create the Secret now:
+
+```bash
+sudo kubectl -n jupyterhub create secret generic tailscale-auth \
+  --from-literal=authkey=tskey-auth-XXXXXXXX
+```
+
+(`34-tailscale-auth.example.txt` documents the same command, for reference —
+don't apply that file itself. See *Remote access over Tailscale* in Core
+concepts above for what this Secret is used for.) If you'd rather skip
+Tailscale for now, comment out the `tailscale` container block in
+`50-deployment.yaml.tmpl` (then re-run
+`./k8s/render.sh`) instead — the Hub itself doesn't need it.
 
 ### Apply and verify
 
