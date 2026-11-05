@@ -16,8 +16,8 @@ narrative — open the manifests for reference.
 ## Before you start: the GPU must work on bare metal
 
 This tutorial starts where
-[**gpu-on-bc250**](https://github.com/mxreyer/gpu-on-bc250) ends. Work
-through its [SETUP.md](https://github.com/mxreyer/gpu-on-bc250/blob/main/SETUP.md)
+[**pytorch-gpu-bc250**](https://github.com/mxreyer/pytorch-gpu-bc250) ends. Work
+through its [SETUP.md](https://github.com/mxreyer/pytorch-gpu-bc250/blob/main/SETUP.md)
 first, at least Stages 1 and 2:
 
 - `clinfo -l` lists the BC-250 under `Platform #0: rusticl`, with
@@ -44,7 +44,7 @@ to Kubernetes pods into a plain device request.
 
 | Stage | Result |
 | ----- | ------ |
-| 0 | *(prerequisite, [gpu-on-bc250](https://github.com/mxreyer/gpu-on-bc250))* PyTorch runs on the GPU on bare metal |
+| 0 | *(prerequisite, [pytorch-gpu-bc250](https://github.com/mxreyer/pytorch-gpu-bc250))* PyTorch runs on the GPU on bare metal |
 | 1 | JupyterHub on k3s: CPU notebook pods with per-user persistent disks and idle culling, reachable on the LAN and over Tailscale |
 | 2 | Those per-user pods use the GPU, as unprivileged pods |
 
@@ -77,7 +77,7 @@ stores):
   fedora:45`** (Mesa 26.2 with rusticl, plus Mesa's patched libclc dropped in
   over Fedora's — see that directory's README), torch 2.4.0 CPU, the patched
   `pytorch_ocl` from
-  [gpu-on-bc250](https://github.com/mxreyer/gpu-on-bc250/blob/main/SETUP.md), `jupyterlab`, and `jupyterhub` for the
+  [pytorch-gpu-bc250](https://github.com/mxreyer/pytorch-gpu-bc250/blob/main/SETUP.md), `jupyterlab`, and `jupyterhub` for the
   `jupyterhub-singleuser` launcher.
 
 ```bash
@@ -436,7 +436,7 @@ sudo systemctl restart k3s
 ```
 
 - Comparing the board against cloud GPUs: the benchmark in
-  [gpu-on-bc250](https://github.com/mxreyer/gpu-on-bc250/blob/main/BENCHMARK.md)
+  [pytorch-gpu-bc250](https://github.com/mxreyer/pytorch-gpu-bc250/blob/main/BENCHMARK.md)
   (`benchmark.py` runs the same ResNet-9/CIFAR-10 workload on `ocl:0`, `cuda`,
   or `cpu`, and its "through JupyterHub" section runs it inside a user pod)
 

@@ -7,7 +7,7 @@
 # README.md becomes the landing page (Pages uses it when there is no
 # index file); TUTORIAL.md is served next to it as .html. The project
 # write-up and the benchmark moved to their own repositories
-# (mxreyer/blog, mxreyer/gpu-on-bc250). GitHub Pages enables the
+# (mxreyer/blog, mxreyer/pytorch-gpu-bc250). GitHub Pages enables the
 # jekyll-relative-links plugin by default, so a link written as
 # [TUTORIAL.md](TUTORIAL.md) resolves to TUTORIAL.html on the site while
 # still working as a file link on github.com. Keep internal links in that
