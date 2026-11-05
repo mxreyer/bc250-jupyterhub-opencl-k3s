@@ -10,7 +10,7 @@
 #   45 -> Mesa 26.2.2: fma() is the hardware instruction; training and
 #         inference within run-to-run noise of 44; correct on both (0 bad / 300
 #         sweeps of wino-repro.py with the shipped default).
-# Measurements: OPENCL-PERF.md in https://github.com/mxreyer/pytorch-dlprim-gfx1013.
+# Environment notes: README of https://github.com/mxreyer/pytorch-dlprim-gfx1013.
 # Override at build time: FEDORA_VERSION=44 ./build.sh
 ARG FEDORA_VERSION=45
 FROM registry.fedoraproject.org/fedora:${FEDORA_VERSION}
@@ -44,8 +44,8 @@ RUN dnf -y install --setopt=install_weak_deps=False \
 # __clc_flush_denormal_if_not_supported as static inline") and ships pre-built
 # drop-in binaries per release. Same LLVM 22.1.8 that Fedora 44 and 45 ship,
 # so nothing else changes. Pinned by URL and sha256; ADD from a URL creates the
-# file 0600, hence --chmod. See OPENCL-PERF.md, Finding 8, in
-# https://github.com/mxreyer/pytorch-dlprim-gfx1013.
+# file 0600, hence --chmod. Background: README of
+# https://github.com/mxreyer/pytorch-dlprim-gfx1013 (environment notes).
 ARG MESA_LIBCLC_VER=22.1.8.3
 ARG MESA_LIBCLC_URL=https://gitlab.freedesktop.org/api/v4/projects/27606/packages/generic/mesa-libclc/${MESA_LIBCLC_VER}
 ADD --chmod=0644 --checksum=sha256:728cdfa747a1857829c104291984964971783a301a62e9468a3d5a4f1750c949 \

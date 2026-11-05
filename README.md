@@ -117,7 +117,7 @@ Full detail in [TUTORIAL.md](TUTORIAL.md). Stages:
 | Repository | What it is |
 | --- | --- |
 | [pytorch-gpu-bc250](https://github.com/mxreyer/pytorch-gpu-bc250) | Getting PyTorch onto the BC-250's GPU on bare metal, plus the ResNet-9 / CIFAR-10 benchmark against cloud GPUs (harness, protocol, every result). |
-| [pytorch-dlprim-gfx1013](https://github.com/mxreyer/pytorch-dlprim-gfx1013) | The `pytorch_ocl` patches and build script, the full technical investigation (`OPENCL-PERF.md`), microbenchmarks and correctness sweeps. The notebook image fetches its `pt_ocl.so` release. |
+| [pytorch-dlprim-gfx1013](https://github.com/mxreyer/pytorch-dlprim-gfx1013) | The `pytorch_ocl` patches and build script, per-patch benchmark numbers, microbenchmarks and correctness sweeps. The notebook image fetches its `pt_ocl.so` release. |
 | [blog](https://github.com/mxreyer/blog) | The write-up of the whole project, [published here](https://mxreyer.github.io/blog/bc250-ml-box/). |
 
 ## License
