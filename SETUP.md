@@ -26,16 +26,16 @@ host needs:
 - A **`render` group with GID 105**: `getent group render` prints
   `render:x:105:`. The spawner adds pods to that GID to open the render
   node. If yours differs, change `supplemental_gids` in
-  `k8s/jupyterhub/30-configmap.yaml.tmpl` (Stage 2) and `--group-add` in the
-  smoke test below.
+  `k8s/jupyterhub/30-configmap.yaml.tmpl` and `--group-add` in the Docker
+  smoke test (both in Stage 2).
 - Optional: the 40 CU / 2.0 GHz unlock from
   [duggasco/bc250-40cu-unlock](https://github.com/duggasco/bc250-40cu-unlock).
   Everything works at the stock 24 CUs, just slower.
 
 Mesa, OpenCL, PyTorch and `pt_ocl.so` do **not** need to be installed on the
-host. The GPU check that counts is the Docker smoke test after the images are
-built in Stage 1: it exercises the same device, driver and userspace a pod
-will use.
+host. The GPU check that counts is the Docker smoke test at the start of Stage 2,
+run against the image built in Stage 1: it exercises the same device, driver
+and userspace a pod will use.
 
 **Recommended, not required:** working through Stages 1-2 of
 [**pytorch-gpu-bc250**](https://github.com/mxreyer/pytorch-gpu-bc250/blob/main/SETUP.md)
@@ -91,24 +91,6 @@ k8s/jupyterhub/notebook-image/build.sh
 ```
 
 Neither image is in a registry, so the manifests set `imagePullPolicy: Never`.
-
-### Check the GPU from the notebook image
-
-Before any Kubernetes is involved, confirm the image reaches the GPU:
-
-```bash
-sudo docker run --rm -it \
-  --device /dev/dri/renderD128 --group-add 105 \
-  bc250-notebook:latest \
-  bash -lc 'clinfo -l && python -c "import torch,pytorch_ocl; \
-    print(torch.randn(1024,1024,device=\"ocl:0\").sum())"'
-```
-
-Expect `clinfo -l` to list `Platform #0: rusticl` with the BC-250 device and
-no `Rusticl warning` line, then a number with no compile error. If this fails,
-fix it here (host driver, `render` GID) before going further; inside a pod
-the same failure is much harder to read. Stage 1 itself runs CPU-only, so you
-can carry on and come back to this before Stage 2.
 
 ### Host-specific values
 
@@ -327,6 +309,24 @@ the host is the `amdgpu` kernel driver behind `/dev/dri/renderD128`. So the
 container's Fedora does not have to match the host's — Fedora 45's Mesa 26.2
 runs fine on a Fedora 44 kernel, and is what the benchmark numbers were
 measured on. Nothing to rebuild here — Stage 2 only wires the device to it.
+
+### Check the GPU from the notebook image
+
+Before wiring the device into Kubernetes, confirm the image reaches the GPU
+with plain Docker:
+
+```bash
+sudo docker run --rm -it \
+  --device /dev/dri/renderD128 --group-add 105 \
+  bc250-notebook:latest \
+  bash -lc 'clinfo -l && python -c "import torch,pytorch_ocl; \
+    print(torch.randn(1024,1024,device=\"ocl:0\").sum())"'
+```
+
+Expect `clinfo -l` to list `Platform #0: rusticl` with the BC-250 device and
+no `Rusticl warning` line, then a number with no compile error. If this fails,
+fix it here (host driver, `render` GID) before going further; inside a pod
+the same failure is much harder to read.
 
 ### Handing over the device (`k8s/device-plugin/`)
 
