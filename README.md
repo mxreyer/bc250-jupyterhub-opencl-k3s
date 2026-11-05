@@ -9,7 +9,9 @@
   plus every manifest, Dockerfile, and helper script. It is explicitly for
   learning, **not a production reference**.
 
-This repo is only the Kubernetes / JupyterHub half of the project. Getting PyTorch onto the BC-250's GPU in the first place is described in [pytorch-gpu-bc250](https://github.com/mxreyer/pytorch-gpu-bc250), alongside benchmarking results against cloud GPUs.
+This repo is only the Kubernetes / JupyterHub half of the project:
+- Getting PyTorch onto the BC-250's GPU in the first place is described in [pytorch-gpu-bc250](https://github.com/mxreyer/pytorch-gpu-bc250), alongside benchmarking results against cloud GPUs.
+- [pytorch-dlprim-gfx1013](https://github.com/mxreyer/pytorch-dlprim-gfx1013) documents patches for the employed OpenCL path.
 
 There is a **write-up** of the whole project: [From mining board to multi-user ML box](https://mxreyer.github.io/blog/bc250-ml-box/)
   ([source](https://github.com/mxreyer/blog)).
