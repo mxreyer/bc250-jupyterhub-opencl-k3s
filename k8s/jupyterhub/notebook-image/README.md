@@ -67,7 +67,7 @@ default for every user, add it next to `RUSTICL_ENABLE` in
 
 - `../30-configmap.yaml.tmpl` — `c.KubeSpawner.image`, the image for every spawned
   user pod (`devic.es/dri` request + `supplemental_gids: [105]` come from the
-  spawner config there, added in Stage 4)
+  spawner config there, added in Stage 2)
 
 ---
 

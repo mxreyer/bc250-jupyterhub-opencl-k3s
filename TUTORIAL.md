@@ -13,16 +13,30 @@ narrative — open the manifests for reference.
 
 ---
 
-## OpenCL, not ROCm
+## Before you start: the GPU must work on bare metal
 
-The BC-250's GPU reports as **gfx1013**, which is not supported by ROCm.
-Instead, this build uses the **OpenCL** path: specifically, **Mesa
-`rusticl`**. The out-of-tree PyTorch backend **`pytorch_ocl`** (a.k.a.
-`pytorch_dlprim`) exposes OpenCL devices to PyTorch as `ocl:0`.
+This tutorial starts where
+[**gpu-on-bc250**](https://github.com/mxreyer/gpu-on-bc250) ends. Work
+through its [SETUP.md](https://github.com/mxreyer/gpu-on-bc250/blob/main/SETUP.md)
+first, at least Stages 1 and 2:
 
-This also simplifies exposing the GPU to Kubernetes pods, which becomes
-a plain device mount: the OpenCL path needs only the DRI render node
-(`/dev/dri/renderD128`), not ROCm's `/dev/kfd`.
+- `clinfo -l` lists the BC-250 under `Platform #0: rusticl`, with
+  `RUSTICL_ENABLE=radeonsi` set;
+- PyTorch runs on `ocl:0` with the patched `pt_ocl.so` from
+  [pytorch-dlprim-gfx1013](https://github.com/mxreyer/pytorch-dlprim-gfx1013),
+  several times faster than on the CPU, and a small model trains.
+
+If either fails on the host, it will fail inside a pod too, and with far
+less helpful errors. The notebook image built below bakes in the same
+software stack (Mesa rusticl, Mesa's patched libclc, torch 2.4.0, the patched
+`pytorch_ocl`), so nothing from that guide has to be installed into the
+cluster by hand.
+
+Why OpenCL and not ROCm matters here: the BC-250's GPU (**gfx1013**) is not
+a ROCm target, so PyTorch reaches it through Mesa's **rusticl** and the
+`pytorch_ocl` backend. The OpenCL path needs only the DRI render node
+(`/dev/dri/renderD128`), not ROCm's `/dev/kfd`, which turns exposing the GPU
+to Kubernetes pods into a plain device request.
 
 ---
 
@@ -30,157 +44,13 @@ a plain device mount: the OpenCL path needs only the DRI render node
 
 | Stage | Result |
 | ----- | ------ |
-| 1 | `clinfo` sees the GPU through rusticl |
-| 2 | PyTorch runs on the GPU, provably faster than CPU |
-| 3 | JupyterHub on k3s: CPU notebook pods with per-user persistent disks and idle culling, reachable on the LAN and over Tailscale |
-| 4 | Those per-user pods use the GPU, as unprivileged pods |
+| 0 | *(prerequisite, [gpu-on-bc250](https://github.com/mxreyer/gpu-on-bc250))* PyTorch runs on the GPU on bare metal |
+| 1 | JupyterHub on k3s: CPU notebook pods with per-user persistent disks and idle culling, reachable on the LAN and over Tailscale |
+| 2 | Those per-user pods use the GPU, as unprivileged pods |
 
 ---
 
-## Stage 1 — OpenCL on bare metal
-
-**Goal:** the GPU is visible to OpenCL through rusticl.
-
-```bash
-sudo dnf install -y mesa-libOpenCL clinfo
-
-# rusticl only exposes the radeonsi gallium driver when explicitly told to.
-# Without this the BC-250 does not appear as an OpenCL device at all. Put it
-# in your shell profile — every bare-metal OpenCL step below needs it (the
-# Kubernetes stages set it inside the pod instead).
-export RUSTICL_ENABLE=radeonsi
-
-clinfo -l
-```
-
-**Verify:** `clinfo -l` lists
-
-```
-Platform #0: rusticl
- `-- Device #0: AMD BC-250 (radeonsi, gfx1013, ...)
-```
-
-A `Rusticl warning: Patched Mesa libclc not detected` line on every run is
-expected — [Stage 2](#stage-2--pytorch-on-the-gpu) deals with what it breaks.
-Without `RUSTICL_ENABLE=radeonsi`, `clinfo -l` prints only `Platform #0:
-rusticl` with no device under it.
-
----
-
-## Stage 2 — PyTorch on the GPU
-
-**Goal:** move a tensor to `ocl:0`, run a model, and **prove** the GPU is
-doing the work. A silent fall-back to CPU looks exactly like success, so the
-proof is a benchmark.
-
-Use a dedicated virtualenv with the CPU build of PyTorch plus `pytorch_ocl`:
-
-```bash
-python3.12 -m venv bc250-ocl-venv
-bc250-ocl-venv/bin/pip install torch==2.4.0 --index-url https://download.pytorch.org/whl/cpu
-bc250-ocl-venv/bin/pip install https://github.com/artyom-beilis/pytorch_dlprim/releases/download/0.2.0/pytorch_ocl-0.2.0+torch2.4-cp312-none-linux_x86_64.whl
-```
-
-The prebuilt wheel asks the OpenCL driver for a newer feature that
-Fedora's stock Mesa doesn't provide, so `softmax`, `cross_entropy`, and
-bias gradients fail to compile. `pytorch_dlprim` already contains a
-portable fallback for this; it's just off by default. Rebuild the
-extension with the fallback on (`CUSTOM_REDUCE=1`) and drop the
-resulting `pt_ocl.so` into the venv. The patches and a build script live in a
-separate repository, [pytorch-dlprim-gfx1013](https://github.com/mxreyer/pytorch-dlprim-gfx1013), which also carries the
-performance work on top (2.54× on training). Its
-[releases](https://github.com/mxreyer/pytorch-dlprim-gfx1013/releases) have a prebuilt `pt_ocl.so` — the same file the
-notebook image installs — so the quick route is:
-
-```bash
-curl -fLo pt_ocl.so https://github.com/mxreyer/pytorch-dlprim-gfx1013/releases/download/v1.2.0/pt_ocl.so
-```
-
-Or build it:
-
-```bash
-git clone https://github.com/mxreyer/pytorch-dlprim-gfx1013 ../pytorch-dlprim-gfx1013
-../pytorch-dlprim-gfx1013/build.sh
-```
-
-The script is self-contained: it builds its *own* throwaway venv under
-`scratch/` (same torch + `pytorch_ocl` as above), clones `pytorch_dlprim`,
-applies the patches, and compiles. Budget ~10 minutes on the BC-250 — almost
-all of it the C++ build. It leaves the rebuilt extension at
-`../pytorch-dlprim-gfx1013/pt_ocl.so`.
-
-Copy it — the downloaded `pt_ocl.so`, or `../pytorch-dlprim-gfx1013/pt_ocl.so`
-from the build — over the stock extension in the venv you made above, and
-delete the compiled-kernel cache (it is keyed to the old kernel source):
-
-```bash
-cp pt_ocl.so \
-   bc250-ocl-venv/lib/python3.12/site-packages/pytorch_ocl/pt_ocl.so
-rm -f ~/.dlprimitives/cache.db
-```
-
-Then, verify (with `RUSTICL_ENABLE=radeonsi` in the environment, from Stage 1 —
-without it `torch.rand(..., device="ocl:0")` raises `RuntimeError: Invalid
-Device #0`):
-
-```python
-import time, torch, pytorch_ocl
-
-x = torch.rand(4096, 4096, device="ocl:0")
-_ = x @ x; torch.ocl.synchronize()
-t = time.time()
-for _ in range(10): y = x @ x
-torch.ocl.synchronize()
-print(f"{2*4096**3/((time.time()-t)/10)/1e9:.0f} GFLOP/s")
-```
-
-The GPU should report ~2000+ GFLOP/s versus ~300 for `x.cpu() @ x.cpu()`.
-
-Then confirm a small classifier trains — this is what actually exercises the
-rebuilt reduction kernels (conv/linear bias gradients, `log_softmax`,
-`nll_loss`):
-
-```python
-import torch, pytorch_ocl
-import torch.nn as nn, torch.nn.functional as F
-
-torch.manual_seed(0)
-dev = "ocl:0"
-
-net = nn.Sequential(
-    nn.Conv2d(3, 8, 3, padding=1), nn.ReLU(),
-    nn.Flatten(),
-    nn.Linear(8 * 32 * 32, 10),
-).to(dev)
-opt = torch.optim.SGD(net.parameters(), lr=0.1)
-
-x = torch.randn(64, 3, 32, 32, device=dev)
-y = torch.randint(0, 10, (64,), device=dev)
-
-for step in range(50):
-    opt.zero_grad()
-    loss = F.cross_entropy(net(x), y)
-    loss.backward()
-    opt.step()
-    if step == 0:
-        first = loss.item()
-
-print(f"loss {first:.3f} -> {loss.item():.3f}")
-```
-
-- **Without** the rebuilt `pt_ocl.so`, the first `backward()` throws an
-  OpenCL *compile* error — `use of undeclared identifier
-  'work_group_reduce_add'`.
-- **With** it, the loss falls steadily (e.g. `2.29 -> 0.01`). Every op ran on
-  the GPU.
-
-A `Rusticl warning: Patched Mesa libclc not detected` line on startup is
-expected and harmless — the whole point of the rebuild is to not need that
-patched libclc.
-
----
-
-## Stage 3 — Kubernetes: JupyterHub on k3s (no GPU yet)
+## Stage 1 — Kubernetes: JupyterHub on k3s (no GPU yet)
 
 **Goal:** JupyterHub running as pods on a k3s cluster, reachable in a browser
 over the LAN. A user signs up, an admin approves, and logging in spawns a
@@ -206,7 +76,8 @@ stores):
 - **`k8s/jupyterhub/notebook-image/`** — the per-user server: **`FROM
   fedora:45`** (Mesa 26.2 with rusticl, plus Mesa's patched libclc dropped in
   over Fedora's — see that directory's README), torch 2.4.0 CPU, the patched
-  `pytorch_ocl` from Stage 2, `jupyterlab`, and `jupyterhub` for the
+  `pytorch_ocl` from
+  [gpu-on-bc250](https://github.com/mxreyer/gpu-on-bc250/blob/main/SETUP.md), `jupyterlab`, and `jupyterhub` for the
   `jupyterhub-singleuser` launcher.
 
 ```bash
@@ -349,7 +220,7 @@ Secret is used for.) If you'd rather skip Tailscale for now, comment out the
 Comment out the GPU block in `30-configmap.yaml.tmpl` (flagged in the file)
 and re-run `./k8s/render.sh`.
 There is no device plugin yet, so with it left in, every spawned user pod
-requests `devic.es/dri` and stays `Pending` forever. Stage 4 turns it back on.
+requests `devic.es/dri` and stays `Pending` forever. Stage 2 turns it back on.
 
 Then apply the rest:
 
@@ -422,20 +293,20 @@ a cell.
 
 ---
 
-## Stage 4 — The GPU inside the per-user pods
+## Stage 2 — The GPU inside the per-user pods
 
 **Goal:** the pods JupyterHub spawns run PyTorch on the BC-250 GPU, and do so
 as ordinary unprivileged pods.
 
 ### Why the notebook image is `FROM fedora:45`
 
-The image you built in Stage 3 (`k8s/jupyterhub/notebook-image/`) is already
+The image you built in Stage 1 (`k8s/jupyterhub/notebook-image/`) is already
 GPU-ready: it carries its own Mesa userspace (`mesa-libOpenCL`,
 `mesa-dri-drivers`, `libclc`, `ocl-icd`), and the only piece it shares with
 the host is the `amdgpu` kernel driver behind `/dev/dri/renderD128`. So the
 container's Fedora does not have to match the host's — Fedora 45's Mesa 26.2
 runs fine on a Fedora 44 kernel, and is what the benchmark numbers were
-measured on. Nothing to rebuild here — Stage 4 only wires the device to it.
+measured on. Nothing to rebuild here — Stage 2 only wires the device to it.
 
 ### Handing over the device (`k8s/device-plugin/`)
 
@@ -468,7 +339,7 @@ as a mismatch.
 ### What the spawner config adds
 
 Uncomment the GPU block in `k8s/jupyterhub/30-configmap.yaml.tmpl` that you
-disabled in Stage 3 (flagged in the file), re-run `./k8s/render.sh`, re-apply
+disabled in Stage 1 (flagged in the file), re-run `./k8s/render.sh`, re-apply
 it, and `sudo kubectl -n jupyterhub rollout restart deploy/hub`. The block:
 
 ```python
@@ -507,7 +378,7 @@ for the end-to-end architecture diagram.
 ## Managing users
 
 JupyterHub authenticates with **NativeAuthenticator** (see the Authentication
-bullet in Stage 3's Core concepts) — everyone manages their own account, so
+bullet in Stage 1's Core concepts) — everyone manages their own account, so
 day-to-day administration rarely touches `kubectl`:
 
 - **`/hub/signup`** — anyone creates an account (username + password).
@@ -564,9 +435,10 @@ sudo kubectl -n jupyterhub exec jupyter-<user> -- python /tmp/gpu-check.py
 sudo systemctl restart k3s
 ```
 
-- Comparing the board against cloud GPUs: [`BENCHMARK.md`](BENCHMARK.md)
+- Comparing the board against cloud GPUs: the benchmark in
+  [gpu-on-bc250](https://github.com/mxreyer/gpu-on-bc250/blob/main/BENCHMARK.md)
   (`benchmark.py` runs the same ResNet-9/CIFAR-10 workload on `ocl:0`, `cuda`,
-  or `cpu`)
+  or `cpu`, and its "through JupyterHub" section runs it inside a user pod)
 
 ---
 
