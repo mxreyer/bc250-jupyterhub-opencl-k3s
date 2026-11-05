@@ -5,11 +5,11 @@
 # Published at https://mxreyer.github.io/bc250-jupyterhub-opencl-k3s/
 #
 # README.md becomes the landing page (Pages uses it when there is no
-# index file); TUTORIAL.md is served next to it as .html. The project
+# index file); SETUP.md is served next to it as .html. The project
 # write-up and the benchmark moved to their own repositories
 # (mxreyer/blog, mxreyer/pytorch-gpu-bc250). GitHub Pages enables the
 # jekyll-relative-links plugin by default, so a link written as
-# [TUTORIAL.md](TUTORIAL.md) resolves to TUTORIAL.html on the site while
+# [SETUP.md](SETUP.md) resolves to SETUP.html on the site while
 # still working as a file link on github.com. Keep internal links in that
 # form, and refer to anything under an excluded path as plain code rather
 # than a link - it would 404 on the site.

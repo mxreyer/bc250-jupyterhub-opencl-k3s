@@ -1,4 +1,4 @@
-# Tutorial: JupyterHub with GPU-accelerated PyTorch on BC-250
+# Setup: JupyterHub with GPU-accelerated PyTorch on BC-250
 
 This walks through turning an AsRock BC-250 mining board into a machine that
 serves GPU-accelerated Jupyter notebooks from a single-node Kubernetes
@@ -15,7 +15,7 @@ narrative — open the manifests for reference.
 
 ## Before you start: the GPU must work on bare metal
 
-This tutorial starts where
+This guide starts where
 [**pytorch-gpu-bc250**](https://github.com/mxreyer/pytorch-gpu-bc250) ends. Work
 through its [SETUP.md](https://github.com/mxreyer/pytorch-gpu-bc250/blob/main/SETUP.md)
 first, at least Stages 1 and 2:

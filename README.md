@@ -73,9 +73,9 @@ render node, so exposing the GPU to a pod is a plain device request.
 - **Docker** and **k3s** (single-node) on the box.
 - Optional, for remote access: **Tailscale**.
 
-## Tutorial
+## Setup
 
-Full detail in [TUTORIAL.md](TUTORIAL.md). Stages:
+Full detail in [SETUP.md](SETUP.md). Stages:
 
 | Stage | Result |
 | ----- | ------ |
@@ -98,7 +98,7 @@ Full detail in [TUTORIAL.md](TUTORIAL.md). Stages:
 
 | Path | What it is |
 | --- | --- |
-| [TUTORIAL.md](TUTORIAL.md) | End-to-end walkthrough. Stages 1-2. |
+| [SETUP.md](SETUP.md) | End-to-end walkthrough. Stages 1-2. |
 | `k8s/env.example`, `k8s/render.sh` | Host-specific values + the renderer that turns `k8s/**/*.yaml.tmpl` into manifests you can apply. Run `./k8s/render.sh` before the first apply. |
 | `k8s/device-plugin/` | `generic-device-plugin` DaemonSet — advertises `devic.es/dri`. Required for any GPU pod (Stage 2). |
 | `k8s/jupyterhub/` | The whole stack (namespace `jupyterhub`): RBAC, ConfigMap, PVC, Deployment (hub + Tailscale sidecar), Service, Ingress. |
