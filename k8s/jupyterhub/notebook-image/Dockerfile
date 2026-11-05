@@ -85,7 +85,8 @@ RUN python3.12 -m venv $VENV \
 # https://github.com/mxreyer/pytorch-dlprim-gfx1013: CUSTOM_REDUCE=1 and the barrier fix
 # it needs (rusticl lacks the work-group reduce built-ins whichever libclc is
 # installed, so the reduction kernels would not compile) plus the Winograd
-# performance work (919 -> 2,337 img/s) and the half-tensor fixes. Fetched from that repo's GitHub release, pinned by
+# performance work (919 -> 2,337 img/s in pytorch-gpu-bc250's BENCHMARK.md) and
+# the half-tensor fixes. Fetched from that repo's GitHub release, pinned by
 # URL + sha256 like the libclc above. To bump: new release there, then update
 # both ARGs here (`sha256sum pt_ocl.so`) and rebuild.
 ARG PT_OCL_VER=v1.2.0
