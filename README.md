@@ -67,9 +67,8 @@ render node, so exposing the GPU to a pod is a plain device request.
 
 ## Prerequisites
 
-- **AsRock BC-250** with PyTorch working on its GPU on bare metal:
-  [pytorch-gpu-bc250](https://github.com/mxreyer/pytorch-gpu-bc250), Stages 1-2
-  (Fedora, Mesa ≥ 26.1, rusticl, the patched `pt_ocl.so`).
+- **AsRock BC-250** with PyTorch working on its GPU on bare metal: Follow Stages 1-2 of
+  [pytorch-gpu-bc250](https://github.com/mxreyer/pytorch-gpu-bc250) (Fedora, Mesa ≥ 26.1, rusticl, the patched `pt_ocl.so`).
 - **Docker** and **k3s** (single-node) on the box.
 - Optional, for remote access: **Tailscale**.
 
