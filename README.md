@@ -1,19 +1,22 @@
 # JupyterHub with GPU-accelerated PyTorch on BC-250
 
-- Turn your AsRock **BC-250** mining board into a GPU-accelerated ML
-  box ([PyTorch through OpenCL](https://github.com/artyom-beilis/pytorch_dlprim))
-  that serves JupyterHub notebooks from a
-  single-node Kubernetes (k3s) cluster on the same machine.
+- Serve **GPU-accelerated PyTorch notebooks** from an AsRock **BC-250**
+  mining board: JupyterHub on a single-node Kubernetes (k3s) cluster on the
+  same machine, one GPU-enabled pod and persistent disk per user.
+- The GPU is handed to **unprivileged** pods by a device plugin.
 - Remote access and HTTPS is handled via **Tailscale** as an in-pod sidecar.
-- Compare your box with a cross-platform [benchmark](BENCHMARK.md)
-  vs. CUDA cloud GPUs; [profiling and fixing the driver
-  stack in a separate repo](https://github.com/mxreyer/pytorch-dlprim-gfx1013) bought us
-  **2.54× on training and 1.59× on inference**.
 - **Learn Kubernetes along the way.** This repo contains a walkthrough
   plus every manifest, Dockerfile, and helper script. It is explicitly for
   learning, **not a production reference**.
 
-**For a summary ➡️ [**BLOG.md**](BLOG.md)**
+This repo is only the Kubernetes / JupyterHub half of the project:
+
+- **Getting PyTorch onto the BC-250's GPU in the first place**, and the
+  benchmark against cloud GPUs (it trains ~2% faster than a T4 in fp32):
+  [**pytorch-gpu-bc250**](https://github.com/mxreyer/pytorch-gpu-bc250). Do that first.
+- **The write-up** of the whole project:
+  [Turning a mining board into a multi-user ML box](https://mxreyer.github.io/blog/bc250-ml-box/)
+  ([source](https://github.com/mxreyer/blog)).
 
 **Detailed instructions for setting it up ➡️ [**TUTORIAL.md**](TUTORIAL.md)**
 
@@ -61,30 +64,18 @@
 
 ## OpenCL, not ROCm
 
-gfx1013 is not an officially supported ROCm target. Instead, this build
-uses **rusticl** (Mesa's OpenCL implementation). This also simplifies
-the Kubernetes stage: the OpenCL path needs only the DRI render node, so
-exposing the GPU to a pod is a plain device request.
-
-This uses a patched version of `pytorch_ocl` from
-[artyom-beilis/pytorch_dlprim](https://github.com/artyom-beilis/pytorch_dlprim).
-
-Initially, we found performance well below what the silicon should
-deliver. See [BENCHMARK.md](BENCHMARK.md) — in FP32, training ResNet-9 on
-CIFAR-10 at 40 CUs / 2.0 GHz ran roughly 2.5× slower than on a cloud T4
-(which it matches on paper);
-[profiling and fixing the OpenCL stack in a separate
-repo](https://github.com/mxreyer/pytorch-dlprim-gfx1013) closed that gap:
-the BC-250 now trains ~2% faster than the T4 and infers within 2% of it.
-
-**Bottom line: not only did we get PyTorch working on hardware ROCm
-refuses, we also made it performant.**
+gfx1013 is not an officially supported ROCm target, so PyTorch reaches the
+GPU through **rusticl** (Mesa's OpenCL implementation) and a patched
+[`pytorch_ocl`](https://github.com/artyom-beilis/pytorch_dlprim); how and
+why is in [pytorch-gpu-bc250](https://github.com/mxreyer/pytorch-gpu-bc250). For the
+Kubernetes side this is a simplification: the OpenCL path needs only the DRI
+render node, so exposing the GPU to a pod is a plain device request.
 
 ## Prerequisites
 
-- **AsRock BC-250**, on Fedora with recent Mesa (≥ 26.1, so rusticl on
-  gfx1013 works). Community clock/fan daemon running and stable under
-  sustained load.
+- **AsRock BC-250** with PyTorch working on its GPU on bare metal:
+  [pytorch-gpu-bc250](https://github.com/mxreyer/pytorch-gpu-bc250), Stages 1-2
+  (Fedora, Mesa ≥ 26.1, rusticl, the patched `pt_ocl.so`).
 - **Docker** and **k3s** (single-node) on the box.
 - Optional, for remote access: **Tailscale**.
 
@@ -94,10 +85,9 @@ Full detail in [TUTORIAL.md](TUTORIAL.md). Stages:
 
 | Stage | Result |
 | ----- | ------ |
-| 1 | `clinfo` sees the GPU through rusticl |
-| 2 | PyTorch runs on the GPU, provably faster than CPU |
-| 3 | JupyterHub on k3s: CPU notebook pods with per-user persistent disks and idle culling, reachable on the LAN and over Tailscale |
-| 4 | Those per-user pods use the GPU, as unprivileged pods |
+| 0 | *(prerequisite, [pytorch-gpu-bc250](https://github.com/mxreyer/pytorch-gpu-bc250))* PyTorch runs on the GPU on bare metal |
+| 1 | JupyterHub on k3s: CPU notebook pods with per-user persistent disks and idle culling, reachable on the LAN and over Tailscale |
+| 2 | Those per-user pods use the GPU, as unprivileged pods |
 
 ## Notes
 
@@ -114,16 +104,21 @@ Full detail in [TUTORIAL.md](TUTORIAL.md). Stages:
 
 | Path | What it is |
 | --- | --- |
-| [BLOG.md](BLOG.md) | Short write-up: objectives, cornerstones, benchmark results, verdict. Start here. |
-| [TUTORIAL.md](TUTORIAL.md) | End-to-end walkthrough. Stages 1-4. |
-| [BENCHMARK.md](BENCHMARK.md) | Workload rationale, protocol, results vs cloud GPUs, and how to run it anywhere. |
-| [pytorch-dlprim-gfx1013](https://github.com/mxreyer/pytorch-dlprim-gfx1013) | Separate repository: the `pytorch_ocl` patches and build script, the full technical investigation (`OPENCL-PERF.md`), microbenchmarks and correctness sweeps, and its own handoff. The notebook image fetches its `pt_ocl.so` release. |
-| `benchmark.py`, `compare.py` | Benchmark harness (ResNet-9 / CIFAR-10). |
+| [TUTORIAL.md](TUTORIAL.md) | End-to-end walkthrough. Stages 1-2. |
 | `k8s/env.example`, `k8s/render.sh` | Host-specific values + the renderer that turns `k8s/**/*.yaml.tmpl` into manifests you can apply. Run `./k8s/render.sh` before the first apply. |
-| `k8s/device-plugin/` | `generic-device-plugin` DaemonSet — advertises `devic.es/dri`. Required for any GPU pod (Stage 4). |
+| `k8s/device-plugin/` | `generic-device-plugin` DaemonSet — advertises `devic.es/dri`. Required for any GPU pod (Stage 2). |
 | `k8s/jupyterhub/` | The whole stack (namespace `jupyterhub`): RBAC, ConfigMap, PVC, Deployment (hub + Tailscale sidecar), Service, Ingress. |
 | `k8s/jupyterhub/image/` | The Hub image: JupyterHub + `kubespawner` + `idle-culler` + `nativeauthenticator`. |
 | `k8s/jupyterhub/notebook-image/` | The `bc250-notebook` image the Hub spawns per user: Fedora + rusticl + torch + patched `pytorch_ocl`. |
+| `k8s/jupyterhub/gpu-check.py` | Proves a running user pod is on the GPU, not silently on the CPU (Stage 2). |
+
+## Related repositories
+
+| Repository | What it is |
+| --- | --- |
+| [pytorch-gpu-bc250](https://github.com/mxreyer/pytorch-gpu-bc250) | Getting PyTorch onto the BC-250's GPU on bare metal, plus the ResNet-9 / CIFAR-10 benchmark against cloud GPUs (harness, protocol, every result). |
+| [pytorch-dlprim-gfx1013](https://github.com/mxreyer/pytorch-dlprim-gfx1013) | The `pytorch_ocl` patches and build script, per-patch benchmark numbers, microbenchmarks and correctness sweeps. The notebook image fetches its `pt_ocl.so` release. |
+| [blog](https://github.com/mxreyer/blog) | The write-up of the whole project, [published here](https://mxreyer.github.io/blog/bc250-ml-box/). |
 
 ## License
 

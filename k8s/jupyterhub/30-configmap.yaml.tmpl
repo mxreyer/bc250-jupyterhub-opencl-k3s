@@ -84,8 +84,8 @@ data:
     c.KubeSpawner.start_timeout = 300
     c.KubeSpawner.http_timeout = 120
 
-    # ── GPU wiring (added in Stage 4) ────────────────────────────────────
-    # For a CPU-only Hub (Stage 3), comment out the two extra_resource_* lines
+    # ── GPU wiring (added in Stage 2) ────────────────────────────────────
+    # For a CPU-only Hub (Stage 1), comment out the two extra_resource_* lines
     # here, the RUSTICL_ENABLE environment below, and supplemental_gids = [105]
     # further down. With them active, every user pod requests devic.es/dri and
     # stays Pending until the generic-device-plugin DaemonSet is running.

@@ -26,8 +26,8 @@ pinned by URL + sha256). Fedora 44's build has an empty
 `__clc_flush_denormal_if_not_supported`, which makes every kernel using
 `sin`/`cos`/`tan`/`fma`/`remquo` fail to link — in PyTorch, that is
 `torch.randn(..., device="ocl:0")`. It is also the source of the
-*"Patched Mesa libclc not detected"* warning. Details:
-[OPENCL-PERF.md](https://github.com/mxreyer/pytorch-dlprim-gfx1013/blob/main/OPENCL-PERF.md), Finding 8. To bump: change `MESA_LIBCLC_VER` and both checksums
+*"Patched Mesa libclc not detected"* warning. Background:
+[pytorch-dlprim-gfx1013's environment notes](https://github.com/mxreyer/pytorch-dlprim-gfx1013#environment-these-numbers-come-from). To bump: change `MESA_LIBCLC_VER` and both checksums
 (`curl -sL <url> | sha256sum`), rebuild, smoke-test.
 
 ## Build + load into k3s
@@ -59,7 +59,7 @@ that catches the libclc problem specifically.
 top of a notebook, before the first convolution runs) switches the Winograd
 convolution kernels to an fp16 inner loop: ~1.3× on ResNet-style training and
 ~1.5× on inference at ~0.5% numerical error, accuracy unchanged over 16 epochs. Off by
-default; details in [OPENCL-PERF.md](https://github.com/mxreyer/pytorch-dlprim-gfx1013/blob/main/OPENCL-PERF.md), Finding 11. To make it the
+default; details in [the fp16 inner-loop write-up](https://github.com/mxreyer/pytorch-dlprim-gfx1013/blob/main/upstream/dlprimitives-winograd-fp16-inner-loop.md). To make it the
 default for every user, add it next to `RUSTICL_ENABLE` in
 `c.KubeSpawner.environment` in `../30-configmap.yaml.tmpl`.
 
@@ -67,7 +67,7 @@ default for every user, add it next to `RUSTICL_ENABLE` in
 
 - `../30-configmap.yaml.tmpl` — `c.KubeSpawner.image`, the image for every spawned
   user pod (`devic.es/dri` request + `supplemental_gids: [105]` come from the
-  spawner config there, added in Stage 4)
+  spawner config there, added in Stage 2)
 
 ---
 

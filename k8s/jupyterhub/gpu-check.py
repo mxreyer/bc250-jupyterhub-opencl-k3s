@@ -1,4 +1,4 @@
-"""Stage 4 GPU check - run inside a spawned user pod.
+"""Stage 2 GPU check - run inside a spawned user pod.
 
 Proves the pod is really using the BC-250 GPU through OpenCL, not silently
 falling back to CPU, by comparing matmul throughput. A silent CPU fallback
