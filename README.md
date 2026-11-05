@@ -83,7 +83,9 @@ render node, so exposing the GPU to a pod is a plain device request.
 
 ## Setup
 
-**Full detail in [SETUP.md](SETUP.md).** Stages:
+**Full detail in [SETUP.md](SETUP.md).**
+
+Stages:
 
 | Stage | Result |
 | ----- | ------ |
