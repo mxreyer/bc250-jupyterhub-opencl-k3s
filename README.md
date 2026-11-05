@@ -67,10 +67,15 @@ render node, so exposing the GPU to a pod is a plain device request.
 
 ## Prerequisites
 
-- **AsRock BC-250** with PyTorch working on its GPU on bare metal: Follow Stages 1-2 of
-  [pytorch-gpu-bc250](https://github.com/mxreyer/pytorch-gpu-bc250) (Fedora, Mesa ≥ 26.1, rusticl, the patched `pt_ocl.so`).
+- **AsRock BC-250** on Fedora with the `amdgpu` driver up (`/dev/dri/renderD128`
+  present), the clock/fan daemon stable under load, and a `render` group at
+  GID 105. Mesa, OpenCL and PyTorch come with the notebook image, so they
+  don't need installing on the host. Details in
+  [SETUP.md](SETUP.md#before-you-start-what-the-host-needs).
 - **Docker** and **k3s** (single-node) on the box.
 - Optional, for remote access: **Tailscale**.
+- Recommended, for debugging: PyTorch working on the GPU on bare metal, via
+  Stages 1-2 of [pytorch-gpu-bc250](https://github.com/mxreyer/pytorch-gpu-bc250).
 
 ## Setup
 
@@ -78,7 +83,6 @@ Full detail in [SETUP.md](SETUP.md). Stages:
 
 | Stage | Result |
 | ----- | ------ |
-| 0 | *(prerequisite, [pytorch-gpu-bc250](https://github.com/mxreyer/pytorch-gpu-bc250))* PyTorch runs on the GPU on bare metal |
 | 1 | JupyterHub on k3s: CPU notebook pods with per-user persistent disks and idle culling, reachable on the LAN and over Tailscale |
 | 2 | Those per-user pods use the GPU, as unprivileged pods |
 

@@ -13,24 +13,36 @@ narrative — open the manifests for reference.
 
 ---
 
-## Before you start: the GPU must work on bare metal
+## Before you start: what the host needs
 
-This guide starts where
-[**pytorch-gpu-bc250**](https://github.com/mxreyer/pytorch-gpu-bc250) ends. Work
-through its [SETUP.md](https://github.com/mxreyer/pytorch-gpu-bc250/blob/main/SETUP.md)
-first, at least Stages 1 and 2:
+The notebook image built in Stage 1 carries the whole GPU software stack
+(Mesa rusticl, Mesa's patched libclc, torch 2.4.0, the patched
+`pytorch_ocl`, `RUSTICL_ENABLE=radeonsi`). The only thing a pod takes from
+the host is the `amdgpu` kernel driver behind `/dev/dri/renderD128`. So the
+host needs:
 
-- `clinfo -l` lists the BC-250 under `Platform #0: rusticl`, with
-  `RUSTICL_ENABLE=radeonsi` set;
-- PyTorch runs on `ocl:0` with the patched `pt_ocl.so` from
-  [pytorch-dlprim-gfx1013](https://github.com/mxreyer/pytorch-dlprim-gfx1013),
-  several times faster than on the CPU, and a small model trains.
+- **AsRock BC-250 on Fedora** with the `amdgpu` driver loaded:
+  `ls /dev/dri/` shows `renderD128`.
+- The community **clock/fan daemon** running and stable under sustained
+  load. Training in a pod loads the GPU exactly as it would on bare metal.
+- A **`render` group with GID 105**: `getent group render` prints
+  `render:x:105:`. The spawner adds pods to that GID to open the render
+  node. If yours differs, change `supplemental_gids` in
+  `k8s/jupyterhub/30-configmap.yaml.tmpl` (Stage 2) and `--group-add` in the
+  smoke test below.
+- Optional: the 40 CU / 2.0 GHz unlock from
+  [duggasco/bc250-40cu-unlock](https://github.com/duggasco/bc250-40cu-unlock).
+  Everything works at the stock 24 CUs, just slower.
 
-If either fails on the host, it will fail inside a pod too, and with far
-less helpful errors. The notebook image built below bakes in the same
-software stack (Mesa rusticl, Mesa's patched libclc, torch 2.4.0, the patched
-`pytorch_ocl`), so nothing from that guide has to be installed into the
-cluster by hand.
+Mesa, OpenCL, PyTorch and `pt_ocl.so` do **not** need to be installed on the
+host. The GPU check that counts is the Docker smoke test after the images are
+built in Stage 1: it exercises the same device, driver and userspace a pod
+will use.
+
+**Recommended, not required:** working through Stages 1-2 of
+[**pytorch-gpu-bc250**](https://github.com/mxreyer/pytorch-gpu-bc250/blob/main/SETUP.md)
+on the host first. A bare-metal setup is the easiest place to debug the GPU,
+and its errors are far more readable than a failing pod's.
 
 Why OpenCL and not ROCm matters here: the BC-250's GPU (**gfx1013**) is not
 a ROCm target, so PyTorch reaches it through Mesa's **rusticl** and the
@@ -44,7 +56,6 @@ to Kubernetes pods into a plain device request.
 
 | Stage | Result |
 | ----- | ------ |
-| 0 | *(prerequisite, [pytorch-gpu-bc250](https://github.com/mxreyer/pytorch-gpu-bc250))* PyTorch runs on the GPU on bare metal |
 | 1 | JupyterHub on k3s: CPU notebook pods with per-user persistent disks and idle culling, reachable on the LAN and over Tailscale |
 | 2 | Those per-user pods use the GPU, as unprivileged pods |
 
@@ -86,6 +97,24 @@ k8s/jupyterhub/notebook-image/build.sh
 ```
 
 Neither image is in a registry, so the manifests set `imagePullPolicy: Never`.
+
+### Check the GPU from the notebook image
+
+Before any Kubernetes is involved, confirm the image reaches the GPU:
+
+```bash
+sudo docker run --rm -it \
+  --device /dev/dri/renderD128 --group-add 105 \
+  bc250-notebook:latest \
+  bash -lc 'clinfo -l && python -c "import torch,pytorch_ocl; \
+    print(torch.randn(1024,1024,device=\"ocl:0\").sum())"'
+```
+
+Expect `clinfo -l` to list `Platform #0: rusticl` with the BC-250 device and
+no `Rusticl warning` line, then a number with no compile error. If this fails,
+fix it here (host driver, `render` GID) before going further; inside a pod
+the same failure is much harder to read. Stage 1 itself runs CPU-only, so you
+can carry on and come back to this before Stage 2.
 
 ### Host-specific values
 
@@ -362,9 +391,10 @@ sudo kubectl -n jupyterhub cp k8s/jupyterhub/gpu-check.py jupyter-<you>:/tmp/gpu
 sudo kubectl -n jupyterhub exec jupyter-<you> -- python /tmp/gpu-check.py
 ```
 
-GPU GFLOP/s should be several times the CPU figure — the same numbers as bare
-metal. Confirm the pod's `securityContext` has no `privileged`, and `/dev/dri/`
-inside the pod contains only `renderD128`.
+GPU GFLOP/s should be several times the CPU figure — the same numbers
+pytorch-gpu-bc250 reports on bare metal. Confirm the pod's `securityContext`
+has no `privileged`, and `/dev/dri/` inside the pod contains only
+`renderD128`.
 
 ---
 
