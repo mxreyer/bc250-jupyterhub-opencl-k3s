@@ -13,7 +13,7 @@ This repo is only the Kubernetes / JupyterHub half of the project:
 
 - **Getting PyTorch onto the BC-250's GPU in the first place**, and the
   benchmark against cloud GPUs (it trains ~2% faster than a T4 in fp32):
-  [**pytorch-gpu-bc250**](https://github.com/mxreyer/pytorch-gpu-bc250). Do that first.
+  [**pytorch-gpu-bc250**](https://github.com/mxreyer/pytorch-gpu-bc250).
 - **The write-up** of the whole project:
   [Turning a mining board into a multi-user ML box](https://mxreyer.github.io/blog/bc250-ml-box/)
   ([source](https://github.com/mxreyer/blog)).
