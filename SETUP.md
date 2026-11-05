@@ -13,7 +13,7 @@ narrative — open the manifests for reference.
 
 ## Before you start: what the host needs
 
-The notebook image built in Stage 1 carries the whole GPU software stack
+The notebook image built in step 2 carries the whole GPU software stack
 (Mesa rusticl, Mesa's patched libclc, torch 2.4.0, the patched
 `pytorch_ocl`, `RUSTICL_ENABLE=radeonsi`). The only thing a pod takes from
 the host is the `amdgpu` kernel driver behind `/dev/dri/renderD128`. So the
@@ -27,15 +27,15 @@ host needs:
   `render:x:105:`. The spawner adds pods to that GID to open the render
   node. If yours differs, change `supplemental_gids` in
   `k8s/jupyterhub/30-configmap.yaml.tmpl` and `--group-add` in the Docker
-  smoke test (both in Stage 2).
+  smoke test (step 3).
 - Optional: the 40 CU / 2.0 GHz unlock from
   [duggasco/bc250-40cu-unlock](https://github.com/duggasco/bc250-40cu-unlock).
   Everything works at the stock 24 CUs, just slower.
 
 Mesa, OpenCL, PyTorch and `pt_ocl.so` do **not** need to be installed on the
-host. The GPU check that counts is the Docker smoke test at the start of Stage 2,
-run against the image built in Stage 1: it exercises the same device, driver
-and userspace a pod will use.
+host. The GPU check that counts is the Docker smoke test in step 3, run against
+the freshly built notebook image: it exercises the same device, driver and
+userspace a pod will use.
 
 **Recommended, not required:** working through Stages 1-2 of
 [**pytorch-gpu-bc250**](https://github.com/mxreyer/pytorch-gpu-bc250/blob/main/SETUP.md)
@@ -48,20 +48,30 @@ a ROCm target, so PyTorch reaches it through Mesa's **rusticl** and the
 (`/dev/dri/renderD128`), not ROCm's `/dev/kfd`, which turns exposing the GPU
 to Kubernetes pods into a plain device request.
 
-## Table of Contents
+## Overview
 
-| Stage | Result |
-| ----- | ------ |
-| 1 | JupyterHub on k3s: CPU notebook pods with per-user persistent disks and idle culling, reachable on the LAN and over Tailscale |
-| 2 | Those per-user pods use the GPU, as unprivileged pods |
+**Goal:** JupyterHub running as pods on a k3s cluster, reachable over the
+LAN and over Tailscale. A user signs up, an admin approves, and logging in
+spawns a per-user notebook pod, with its own persistent disk, that runs
+PyTorch on the BC-250 GPU as an ordinary unprivileged pod. Idle servers are
+culled after an hour.
 
-## Stage 1 — Kubernetes: JupyterHub on k3s (no GPU yet)
+The steps build the system bottom-up, and each ends with a check, so a
+failure always points at the layer just added:
 
-**Goal:** JupyterHub running as pods on a k3s cluster, reachable in a browser
-over the LAN. A user signs up, an admin approves, and logging in spawns a
-per-user notebook pod that can run `1 + 1`. No GPU yet.
+| Step | Result |
+| ---- | ------ |
+| 1 | k3s installed |
+| 2 | Hub and notebook images built and imported into k3s |
+| 3 | The notebook image reaches the GPU under plain Docker |
+| 4 | Kubernetes advertises the GPU as a schedulable resource |
+| 5 | *(reading)* what is in `k8s/jupyterhub/` and why |
+| 6 | JupyterHub deployed and answering on the LAN |
+| 7 | Logged in: a per-user pod with a persistent disk and idle culling |
+| 8 | That pod computes on the GPU |
+| 9 | Remote access over Tailscale |
 
-First, install k3s
+## 1. Install k3s
 
 ```bash
 curl -sfL https://get.k3s.io | sh -
@@ -71,7 +81,7 @@ k3s is real, upstream-conformant Kubernetes in one binary. It ships CoreDNS,
 the **Traefik** ingress controller, a **local-path** storage provisioner, and
 `metrics-server`.
 
-### Two images, built locally
+## 2. Build the two images
 
 Build both with Docker and import them into k3s's containerd (separate image
 stores):
@@ -92,7 +102,66 @@ k8s/jupyterhub/notebook-image/build.sh
 
 Neither image is in a registry, so the manifests set `imagePullPolicy: Never`.
 
-### The objects (`k8s/jupyterhub/`)
+### Why the notebook image is `FROM fedora:45`
+
+The notebook image (`k8s/jupyterhub/notebook-image/`) is GPU-ready on its
+own: it carries its own Mesa userspace (`mesa-libOpenCL`,
+`mesa-dri-drivers`, `libclc`, `ocl-icd`), and the only piece it shares with
+the host is the `amdgpu` kernel driver behind `/dev/dri/renderD128`. So the
+container's Fedora does not have to match the host's — Fedora 45's Mesa 26.2
+runs fine on a Fedora 44 kernel, and is what the benchmark numbers were
+measured on. All Kubernetes has to do is hand the device to the pod.
+
+## 3. Check the GPU from the notebook image
+
+Before any Kubernetes is involved, confirm the image reaches the GPU
+with plain Docker:
+
+```bash
+sudo docker run --rm -it \
+  --device /dev/dri/renderD128 --group-add 105 \
+  bc250-notebook:latest \
+  bash -lc 'clinfo -l && python -c "import torch,pytorch_ocl; \
+    print(torch.randn(1024,1024,device=\"ocl:0\").sum())"'
+```
+
+Expect `clinfo -l` to list `Platform #0: rusticl` with the BC-250 device and
+no `Rusticl warning` line, then a number with no compile error. If this fails,
+fix it here (host driver, `render` GID) before going further; inside a pod
+the same failure is much harder to read.
+
+## 4. Hand the GPU to Kubernetes (`k8s/device-plugin/`)
+
+A plain `hostPath` mount of `/dev/dri` makes the device *file* visible but the
+kernel's **device cgroup** still blocks I/O on it. The right tool is a
+**device plugin**: a small DaemonSet that advertises the device to the kubelet
+as a schedulable resource. Pods *request* it and the kubelet wires it in with
+exactly the right permission and nothing more.
+
+This build uses **`generic-device-plugin`** (config-driven, no code). It
+advertises `/dev/dri/renderD128` as `devic.es/dri`. Only the plugin DaemonSet
+runs privileged; workload pods stay unprivileged.
+
+```bash
+sudo kubectl apply -f k8s/device-plugin/
+sudo kubectl describe node | grep 'devic.es/dri'
+```
+
+Expect two lines reading `10` — from the node's `Capacity:` and
+`Allocatable:` sections. `10`, not `1`: the plugin is configured to let up to
+10 pods share the single render node (`count: 10` in
+`generic-device-plugin.yaml`) — rusticl contexts coexist fine on one device.
+
+Checking this now, before any user pod exists, means a GPU failure in step 8
+is about the pod itself, not a node with no GPU to give.
+
+Later, once per-user pods are running, the same grep also matches a third
+line from the node's `Allocated resources:` table — formatted
+`devic.es/dri  <requests>  <limits>`, e.g. `1  1` for one active pod. That
+line reflects current usage, not the `10` total, so don't read it as a
+mismatch.
+
+## 5. The objects (`k8s/jupyterhub/`)
 
 | File | Kind | Purpose |
 | ---- | ---- | ------- |
@@ -141,6 +210,20 @@ Neither image is in a registry, so the manifests set `imagePullPolicy: Never`.
   call that creates `jupyter-<user>` and `claim-<user>`. The per-user pod spec
   lives in `jupyterhub_config.py` as spawner settings, not as a static
   Deployment.
+- **GPU wiring.** The spawner settings in `jupyterhub_config.py` that put a
+  user pod on the GPU:
+
+  ```python
+  c.KubeSpawner.extra_resource_limits     = {"devic.es/dri": "1"}   # request the render node
+  c.KubeSpawner.extra_resource_guarantees = {"devic.es/dri": "1"}
+  c.KubeSpawner.environment      = {"RUSTICL_ENABLE": "radeonsi"}
+  c.KubeSpawner.supplemental_gids = [105]                           # host "render" group
+  c.KubeSpawner.mem_limit = "6G"                                    # GPU buffers count as pod memory
+  ```
+
+  Requesting `devic.es/dri` makes the kubelet wire in the render node from
+  step 4. It also means a user pod won't schedule at all if the plugin isn't
+  running — it stays `Pending`, with no silent CPU-only fallback.
 - **Authentication.** `NativeAuthenticator`: users self-register at
   `/hub/signup`, an admin approves at `/hub/authorize`, everyone changes their
   own password at `/hub/change-password`. Credentials (bcrypt) sit in the Hub
@@ -173,6 +256,8 @@ Neither image is in a registry, so the manifests set `imagePullPolicy: Never`.
   `c.JupyterHub.public_url = "https://…ts.net/"` in the ConfigMap — without it
   the Hub sees plain HTTP from the sidecar, emits `http://` redirects, and the
   login loops.
+
+## 6. Deploy JupyterHub
 
 ### Host-specific values
 
@@ -215,20 +300,13 @@ sudo kubectl -n jupyterhub create secret generic tailscale-auth \
 ```
 
 (`34-tailscale-auth.example.txt` documents the same command, for reference —
-don't apply that file itself. See *Remote access over Tailscale* in Core
-concepts above for what this Secret is used for.) If you'd rather skip
+don't apply that file itself. See *Remote access over Tailscale* in step 5's
+Core concepts for what this Secret is used for.) If you'd rather skip
 Tailscale for now, comment out the `tailscale` container block in
 `50-deployment.yaml.tmpl` (then re-run
 `./k8s/render.sh`) instead — the Hub itself doesn't need it.
 
 ### Apply and verify
-
-Comment out the GPU block in `30-configmap.yaml.tmpl` (flagged in the file)
-and re-run `./k8s/render.sh`.
-There is no device plugin yet, so with it left in, every spawned user pod
-requests `devic.es/dri` and stays `Pending` forever. Stage 2 turns it back on.
-
-Then apply the rest:
 
 ```bash
 sudo kubectl apply -f k8s/jupyterhub/
@@ -241,7 +319,7 @@ sudo kubectl -n jupyterhub get deploy,rs,pod,svc,ingress,pvc
 curl -s -o /dev/null -w '%{http_code}\n' http://hub.<LAN-IP>.sslip.io/hub/login   # 200 from the Hub
 ```
 
-### Log in
+## 7. Log in
 
 Open `http://hub.<LAN-IP>.sslip.io/hub/login` and sign up as
 `${HUB_ADMIN}` — NativeAuthenticator auto-authorizes any username listed
@@ -283,7 +361,22 @@ again — the file is still there. Leave a server idle past the timeout and
 watch the culler delete `jupyter-<you>` (`sudo kubectl -n jupyterhub get pod
 -w`).
 
-### Confirm Tailscale access
+## 8. Check the GPU from a user pod
+
+Start a server from the Hub (the culler may have stopped the one from step 7),
+then run the GPU check inside it:
+
+```bash
+sudo kubectl -n jupyterhub cp k8s/jupyterhub/gpu-check.py jupyter-<you>:/tmp/gpu-check.py
+sudo kubectl -n jupyterhub exec jupyter-<you> -- python /tmp/gpu-check.py
+```
+
+GPU GFLOP/s should be several times the CPU figure — the same numbers
+pytorch-gpu-bc250 reports on bare metal. Confirm the pod's `securityContext`
+has no `privileged`, and `/dev/dri/` inside the pod contains only
+`renderD128`.
+
+## 9. Confirm Tailscale access
 
 Skip if you commented out the sidecar.
 
@@ -296,98 +389,6 @@ curl -s -o /dev/null -w '%{http_code}\n' https://<node>.<tailnet>.ts.net/hub/log
 returns `200` with a valid certificate. Log in from a tailnet device and run
 a cell.
 
-## Stage 2 — The GPU inside the per-user pods
-
-**Goal:** the pods JupyterHub spawns run PyTorch on the BC-250 GPU, and do so
-as ordinary unprivileged pods.
-
-### Why the notebook image is `FROM fedora:45`
-
-The image you built in Stage 1 (`k8s/jupyterhub/notebook-image/`) is already
-GPU-ready: it carries its own Mesa userspace (`mesa-libOpenCL`,
-`mesa-dri-drivers`, `libclc`, `ocl-icd`), and the only piece it shares with
-the host is the `amdgpu` kernel driver behind `/dev/dri/renderD128`. So the
-container's Fedora does not have to match the host's — Fedora 45's Mesa 26.2
-runs fine on a Fedora 44 kernel, and is what the benchmark numbers were
-measured on. Nothing to rebuild here — Stage 2 only wires the device to it.
-
-### Check the GPU from the notebook image
-
-Before wiring the device into Kubernetes, confirm the image reaches the GPU
-with plain Docker:
-
-```bash
-sudo docker run --rm -it \
-  --device /dev/dri/renderD128 --group-add 105 \
-  bc250-notebook:latest \
-  bash -lc 'clinfo -l && python -c "import torch,pytorch_ocl; \
-    print(torch.randn(1024,1024,device=\"ocl:0\").sum())"'
-```
-
-Expect `clinfo -l` to list `Platform #0: rusticl` with the BC-250 device and
-no `Rusticl warning` line, then a number with no compile error. If this fails,
-fix it here (host driver, `render` GID) before going further; inside a pod
-the same failure is much harder to read.
-
-### Handing over the device (`k8s/device-plugin/`)
-
-A plain `hostPath` mount of `/dev/dri` makes the device *file* visible but the
-kernel's **device cgroup** still blocks I/O on it. The right tool is a
-**device plugin**: a small DaemonSet that advertises the device to the kubelet
-as a schedulable resource. Pods *request* it and the kubelet wires it in with
-exactly the right permission and nothing more.
-
-This build uses **`generic-device-plugin`** (config-driven, no code). It
-advertises `/dev/dri/renderD128` as `devic.es/dri`. Only the plugin DaemonSet
-runs privileged; workload pods stay unprivileged.
-
-```bash
-sudo kubectl apply -f k8s/device-plugin/
-sudo kubectl describe node | grep 'devic.es/dri'
-```
-
-Expect two lines reading `10` — from the node's `Capacity:` and
-`Allocatable:` sections. `10`, not `1`: the plugin is configured to let up to
-10 pods share the single render node (`count: 10` in
-`generic-device-plugin.yaml`) — rusticl contexts coexist fine on one device.
-
-If any per-user pod is already running with the GPU wired up, the same grep
-also matches a third line from the node's `Allocated resources:` table —
-formatted `devic.es/dri  <requests>  <limits>`, e.g. `1  1` for one active
-pod. That line reflects current usage, not the `10` total, so don't read it
-as a mismatch.
-
-### What the spawner config adds
-
-Uncomment the GPU block in `k8s/jupyterhub/30-configmap.yaml.tmpl` that you
-disabled in Stage 1 (flagged in the file), re-run `./k8s/render.sh`, re-apply
-it, and `sudo kubectl -n jupyterhub rollout restart deploy/hub`. The block:
-
-```python
-c.KubeSpawner.extra_resource_limits     = {"devic.es/dri": "1"}   # request the render node
-c.KubeSpawner.extra_resource_guarantees = {"devic.es/dri": "1"}
-c.KubeSpawner.environment      = {"RUSTICL_ENABLE": "radeonsi"}
-c.KubeSpawner.supplemental_gids = [105]                           # host "render" group
-c.KubeSpawner.mem_limit = "6G"                                    # GPU buffers count as pod memory
-```
-
-Requesting the resource also means a user pod won't schedule at all if the
-plugin isn't running — no silent CPU-only fallback.
-
-### Verify
-
-Start a fresh server from the Hub, then run the GPU check inside it:
-
-```bash
-sudo kubectl -n jupyterhub cp k8s/jupyterhub/gpu-check.py jupyter-<you>:/tmp/gpu-check.py
-sudo kubectl -n jupyterhub exec jupyter-<you> -- python /tmp/gpu-check.py
-```
-
-GPU GFLOP/s should be several times the CPU figure — the same numbers
-pytorch-gpu-bc250 reports on bare metal. Confirm the pod's `securityContext`
-has no `privileged`, and `/dev/dri/` inside the pod contains only
-`renderD128`.
-
 ## Done!
 
 That's the whole system: see [README.md](README.md#architecture-end-to-end)
@@ -396,7 +397,7 @@ for the end-to-end architecture diagram.
 ## Managing users
 
 JupyterHub authenticates with **NativeAuthenticator** (see the Authentication
-bullet in Stage 1's Core concepts) — everyone manages their own account, so
+bullet in step 5's Core concepts) — everyone manages their own account, so
 day-to-day administration rarely touches `kubectl`:
 
 - **`/hub/signup`** — anyone creates an account (username + password).

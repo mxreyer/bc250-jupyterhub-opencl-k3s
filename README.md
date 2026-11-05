@@ -85,12 +85,16 @@ render node, so exposing the GPU to a pod is a plain device request.
 
 **Full detail in [SETUP.md](SETUP.md).**
 
-Stages:
+One pass, built bottom-up with a check after each layer:
 
-| Stage | Result |
-| ----- | ------ |
-| 1 | JupyterHub on k3s: CPU notebook pods with per-user persistent disks and idle culling, reachable on the LAN and over Tailscale |
-| 2 | Those per-user pods use the GPU, as unprivileged pods |
+| Step | Result |
+| ---- | ------ |
+| 1-2 | k3s installed; Hub and notebook images built |
+| 3 | The notebook image reaches the GPU under plain Docker |
+| 4 | The device plugin advertises the GPU to Kubernetes |
+| 5-7 | JupyterHub deployed; logging in spawns a per-user pod with a persistent disk and idle culling |
+| 8 | That pod computes on the GPU, unprivileged |
+| 9 | Remote access over Tailscale |
 
 ## Notes
 
@@ -107,13 +111,13 @@ Stages:
 
 | Path | What it is |
 | --- | --- |
-| [SETUP.md](SETUP.md) | **End-to-end walkthrough.** Stages 1-2. |
+| [SETUP.md](SETUP.md) | **End-to-end walkthrough.** Steps 1-9. |
 | `k8s/env.example`, `k8s/render.sh` | Host-specific values + the renderer that turns `k8s/**/*.yaml.tmpl` into manifests you can apply. Run `./k8s/render.sh` before the first apply. |
-| `k8s/device-plugin/` | `generic-device-plugin` DaemonSet — advertises `devic.es/dri`. Required for any GPU pod (Stage 2). |
+| `k8s/device-plugin/` | `generic-device-plugin` DaemonSet — advertises `devic.es/dri`. Required for any GPU pod (step 4). |
 | `k8s/jupyterhub/` | The whole stack (namespace `jupyterhub`): RBAC, ConfigMap, PVC, Deployment (hub + Tailscale sidecar), Service, Ingress. |
 | `k8s/jupyterhub/image/` | The Hub image: JupyterHub + `kubespawner` + `idle-culler` + `nativeauthenticator`. |
 | `k8s/jupyterhub/notebook-image/` | The `bc250-notebook` image the Hub spawns per user: Fedora + rusticl + torch + patched `pytorch_ocl`. |
-| `k8s/jupyterhub/gpu-check.py` | Proves a running user pod is on the GPU, not silently on the CPU (Stage 2). |
+| `k8s/jupyterhub/gpu-check.py` | Proves a running user pod is on the GPU, not silently on the CPU (step 8). |
 
 ## Related repositories
 

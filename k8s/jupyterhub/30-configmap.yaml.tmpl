@@ -84,11 +84,11 @@ data:
     c.KubeSpawner.start_timeout = 300
     c.KubeSpawner.http_timeout = 120
 
-    # ── GPU wiring (added in Stage 2) ────────────────────────────────────
-    # For a CPU-only Hub (Stage 1), comment out the two extra_resource_* lines
-    # here, the RUSTICL_ENABLE environment below, and supplemental_gids = [105]
-    # further down. With them active, every user pod requests devic.es/dri and
-    # stays Pending until the generic-device-plugin DaemonSet is running.
+    # ── GPU wiring (SETUP.md step 5, "GPU wiring") ──────────────────────
+    # The two extra_resource_* lines here, the RUSTICL_ENABLE environment
+    # below, and supplemental_gids = [105] further down. Every user pod
+    # requests devic.es/dri, so it stays Pending unless the
+    # generic-device-plugin DaemonSet (k8s/device-plugin/, step 4) is running.
     c.KubeSpawner.extra_resource_limits = {"devic.es/dri": "1"}
     c.KubeSpawner.extra_resource_guarantees = {"devic.es/dri": "1"}
     c.KubeSpawner.mem_limit = "6G"
@@ -98,8 +98,8 @@ data:
     c.KubeSpawner.environment = {"RUSTICL_ENABLE": "radeonsi"}
 
     # uid/gid match the image's "jovyan" user; fs_gid 1000 makes the per-user
-    # PVC writable. supplemental 105 = host "render" group for /dev/dri (Stage
-    # 4 — see the GPU-wiring note above).
+    # PVC writable. supplemental 105 = host "render" group for /dev/dri (see the
+    # GPU-wiring note above).
     c.KubeSpawner.uid = 1000
     c.KubeSpawner.gid = 1000
     c.KubeSpawner.fs_gid = 1000
