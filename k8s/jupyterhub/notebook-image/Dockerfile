@@ -89,9 +89,9 @@ RUN python3.12 -m venv $VENV \
 # the half-tensor fixes. Fetched from that repo's GitHub release, pinned by
 # URL + sha256 like the libclc above. To bump: new release there, then update
 # both ARGs here (`sha256sum pt_ocl.so`) and rebuild.
-ARG PT_OCL_VER=v1.2.0
+ARG PT_OCL_VER=v1.3.0
 ARG PT_OCL_URL=https://github.com/mxreyer/pytorch-dlprim-gfx1013/releases/download/${PT_OCL_VER}/pt_ocl.so
-ARG PT_OCL_SHA256=0923e8f392f84f20647b4c927bac3baf122c5914d153e4708874cfe594a21d22
+ARG PT_OCL_SHA256=283410d408e43ade29864b5cd3bb59024d1f78d9367489ce3a8b8c03437d89ad
 ADD --chmod=0644 --checksum=sha256:${PT_OCL_SHA256} ${PT_OCL_URL} /tmp/pt_ocl.so
 RUN install -m0644 /tmp/pt_ocl.so \
       "$VENV/lib/python3.12/site-packages/pytorch_ocl/pt_ocl.so" \
