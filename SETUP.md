@@ -11,8 +11,6 @@ real — everything is in plain, readable manifests, not a Helm chart.
 The finished layout lives in this repo under `k8s/`. This document is the
 narrative — open the manifests for reference.
 
----
-
 ## Before you start: what the host needs
 
 The notebook image built in Stage 1 carries the whole GPU software stack
@@ -50,16 +48,12 @@ a ROCm target, so PyTorch reaches it through Mesa's **rusticl** and the
 (`/dev/dri/renderD128`), not ROCm's `/dev/kfd`, which turns exposing the GPU
 to Kubernetes pods into a plain device request.
 
----
-
 ## Table of Contents
 
 | Stage | Result |
 | ----- | ------ |
 | 1 | JupyterHub on k3s: CPU notebook pods with per-user persistent disks and idle culling, reachable on the LAN and over Tailscale |
 | 2 | Those per-user pods use the GPU, as unprivileged pods |
-
----
 
 ## Stage 1 — Kubernetes: JupyterHub on k3s (no GPU yet)
 
@@ -319,9 +313,6 @@ curl -s -o /dev/null -w '%{http_code}\n' https://<node>.<tailnet>.ts.net/hub/log
 returns `200` with a valid certificate. Log in from a tailnet device and run
 a cell.
 
-
----
-
 ## Stage 2 — The GPU inside the per-user pods
 
 **Goal:** the pods JupyterHub spawns run PyTorch on the BC-250 GPU, and do so
@@ -396,14 +387,10 @@ pytorch-gpu-bc250 reports on bare metal. Confirm the pod's `securityContext`
 has no `privileged`, and `/dev/dri/` inside the pod contains only
 `renderD128`.
 
----
-
 ## Done!
 
 That's the whole system: see [README.md](README.md#architecture-end-to-end)
 for the end-to-end architecture diagram.
-
----
 
 ## Managing users
 
@@ -431,8 +418,6 @@ day-to-day administration rarely touches `kubectl`:
 - Credentials (bcrypt) and approval state sit in the Hub's SQLite DB on the
   `hub-state` PVC — durable across pod restarts, lost only if that PVC is
   deleted.
-
----
 
 ## Operating it
 
