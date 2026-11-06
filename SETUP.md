@@ -184,43 +184,25 @@ mismatch.
 - A pod's IP is disposable. A **Service** gives a fixed virtual IP and DNS
   name (`hub.jupyterhub.svc.cluster.local`) that tracks whichever pods match.
 - **Ingress.** The Service's IP is cluster-internal, so a LAN browser can't
-  reach it. An **Ingress** is a routing rule, and the **ingress controller**
-  enforces it. That controller is Traefik, which k3s bundles, listening on the
-  node's `:80`/`:443`. The rule in `70-ingress.yaml` reads "requests whose
-  HTTP `Host` header is `hub.<LAN-IP>.sslip.io`, any path → Service `hub`,
-  port `http` (8000)". So the path is browser → `<LAN-IP>:80` (Traefik) →
-  Service → Hub pod. Only `:8000` is routed; the Hub API (`:8081`) stays
-  in-cluster.
-  - **Why `http://<LAN-IP>/` gets a 404.** The browser puts the name from the
-    URL in the `Host` header, so a bare-IP URL sends `Host: <LAN-IP>`. The
-    rule's `host:` field accepts only `hub.<LAN-IP>.sslip.io`, and no other
-    rule exists, so Traefik returns 404. The rule rejects the IP, not
-    Traefik. You can confirm that only the header matters:
-    `curl -H 'Host: hub.<LAN-IP>.sslip.io' http://<LAN-IP>/hub/login`
-    returns 200.
-  - **A plain IP can work.** Delete the `host:` line and the rule becomes a
-    catch-all that matches any `Host`, so `http://<LAN-IP>/` reaches the Hub.
-    You can't put the IP itself in `host:`; Kubernetes rejects an IP there.
-    The choices are a DNS name or no host at all.
-  - **Why this repo uses a name anyway.** A catch-all claims all of port 80,
-    which is fine for one app, but a second app (Grafana, say) needs its own
-    hostname so Traefik can tell the two apart. A name also gives you a
-    stable, recognizable URL. sslip.io provides that name with no DNS setup. The rule has no `tls:`
-  block, so the LAN path is plain HTTP; HTTPS comes from the Tailscale
-  sidecar, which bypasses the Ingress.
-- **sslip.io** is an ordinary domain under `.io`. Its DNS
-  server answers with whatever IP is embedded in the name you look up:
-  `hub.192.168.1.100.sslip.io` (or `hub.192-168-1-100.sslip.io`) → `192.168.1.100`.
-  That gives the Ingress a real hostname to match without local DNS,
-  `/etc/hosts` edits or a bought domain. `render.sh` fills in `NODE_LAN_IP`
-  from `k8s/env.local`. Caveats:
-  - The lookup goes to sslip.io's public DNS, so clients need internet access.
-    Some routers' DNS-rebinding protection drops public names that resolve to
-    private IPs.
-  - The IP is part of the name. If the box's LAN IP changes, re-render and
-    re-apply; a DHCP reservation for the box avoids this.
-  - No practical TLS. A Let's Encrypt cert would need the box reachable from
-    the internet, which is another reason HTTPS goes through Tailscale.
+  reach it. An **Ingress** is a routing rule — "requests for this hostname
+  and path go to that Service" — enforced by an **ingress controller**:
+  Traefik, bundled with k3s, listening on the node's `:80`/`:443`. Our rule
+  sends `Host: hub.<LAN-IP>.sslip.io` → Service `hub` port 8000, so the path
+  is browser → Traefik → Service → Hub pod. The Hub API (`:8081`) is not
+  routed. There's no `tls:` block; HTTPS comes from the Tailscale sidecar.
+- **sslip.io** is a public DNS service that resolves any name with an IP
+  embedded in it to that IP: `hub.192.168.1.100.sslip.io` → `192.168.1.100`.
+  It gives us a real hostname with no local DNS, `/etc/hosts` edits or
+  bought domain. `render.sh` fills in `NODE_LAN_IP` from `k8s/env.local`.
+- **Why a hostname, not a plain IP.** Ingress rules route on the HTTP `Host`
+  header, and Kubernetes won't accept an IP in the `host:` field — it must be
+  a DNS name or omitted. Omitting it makes a catch-all that swallows all of
+  port 80, leaving no way to route a second app (e.g. Grafana) on the same
+  box. A name keeps the rule specific and the URL recognizable. Consequence:
+  `http://<LAN-IP>/` sends `Host: <LAN-IP>`, matches nothing, and Traefik
+  returns 404. Caveats of sslip.io: clients need internet DNS (and some
+  routers' DNS-rebinding protection blocks it); if the LAN IP changes,
+  re-render and re-apply (use a DHCP reservation).
 - **Persistent Hub state.** A **PersistentVolumeClaim** requests durable disk;
   k3s's `local-path` provisioner satisfies it with a directory on the node.
   `hub-state` holds the SQLite DB (user table + bcrypt credentials) and the
