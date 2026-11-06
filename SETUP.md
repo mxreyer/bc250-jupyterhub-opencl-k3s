@@ -189,9 +189,23 @@ mismatch.
   node's `:80`/`:443`. The rule in `70-ingress.yaml` reads "requests whose
   HTTP `Host` header is `hub.<LAN-IP>.sslip.io`, any path → Service `hub`,
   port `http` (8000)". So the path is browser → `<LAN-IP>:80` (Traefik) →
-  Service → Hub pod. Traefik matches on the **hostname**, not the IP:
-  `http://<LAN-IP>/` sends the wrong `Host` and gets a 404. Only `:8000` is
-  routed; the Hub API (`:8081`) stays in-cluster. The rule has no `tls:`
+  Service → Hub pod. Only `:8000` is routed; the Hub API (`:8081`) stays
+  in-cluster.
+  - **Why `http://<LAN-IP>/` gets a 404.** The browser puts the name from the
+    URL in the `Host` header, so a bare-IP URL sends `Host: <LAN-IP>`. The
+    rule's `host:` field accepts only `hub.<LAN-IP>.sslip.io`, and no other
+    rule exists, so Traefik returns 404. The rule rejects the IP, not
+    Traefik. You can confirm that only the header matters:
+    `curl -H 'Host: hub.<LAN-IP>.sslip.io' http://<LAN-IP>/hub/login`
+    returns 200.
+  - **A plain IP can work.** Delete the `host:` line and the rule becomes a
+    catch-all that matches any `Host`, so `http://<LAN-IP>/` reaches the Hub.
+    You can't put the IP itself in `host:`; Kubernetes rejects an IP there.
+    The choices are a DNS name or no host at all.
+  - **Why this repo uses a name anyway.** A catch-all claims all of port 80,
+    which is fine for one app, but a second app (Grafana, say) needs its own
+    hostname so Traefik can tell the two apart. A name also gives you a
+    stable, recognizable URL. sslip.io provides that name with no DNS setup. The rule has no `tls:`
   block, so the LAN path is plain HTTP; HTTPS comes from the Tailscale
   sidecar, which bypasses the Ingress.
 - **sslip.io** is an ordinary domain under `.io`. Its DNS
