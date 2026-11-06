@@ -194,7 +194,7 @@ mismatch.
   routed; the Hub API (`:8081`) stays in-cluster. The rule has no `tls:`
   block, so the LAN path is plain HTTP; HTTPS comes from the Tailscale
   sidecar, which bypasses the Ingress.
-- **sslip.io** is not a TLD; it's an ordinary domain under `.io`. Its DNS
+- **sslip.io** is an ordinary domain under `.io`. Its DNS
   server answers with whatever IP is embedded in the name you look up:
   `hub.192.168.1.100.sslip.io` (or `hub.192-168-1-100.sslip.io`) → `192.168.1.100`.
   That gives the Ingress a real hostname to match without local DNS,
