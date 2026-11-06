@@ -183,9 +183,30 @@ mismatch.
   because it holds a `ReadWriteOnce` state PVC — never two Hub pods at once.
 - A pod's IP is disposable. A **Service** gives a fixed virtual IP and DNS
   name (`hub.jupyterhub.svc.cluster.local`) that tracks whichever pods match.
-- An **Ingress** routes for Traefik: match the HTTP `Host` header, forward to
-  a Service. The wildcard host `hub.<LAN-IP>.sslip.io` needs no DNS setup —
-  `sslip.io` resolves `anything.192.168.1.100.sslip.io` straight to that IP.
+- **Ingress.** The Service's IP is cluster-internal, so a LAN browser can't
+  reach it. An **Ingress** is a routing rule, and the **ingress controller**
+  enforces it. That controller is Traefik, which k3s bundles, listening on the
+  node's `:80`/`:443`. The rule in `70-ingress.yaml` reads "requests whose
+  HTTP `Host` header is `hub.<LAN-IP>.sslip.io`, any path → Service `hub`,
+  port `http` (8000)". So the path is browser → `<LAN-IP>:80` (Traefik) →
+  Service → Hub pod. Traefik matches on the **hostname**, not the IP:
+  `http://<LAN-IP>/` sends the wrong `Host` and gets a 404. Only `:8000` is
+  routed; the Hub API (`:8081`) stays in-cluster. The rule has no `tls:`
+  block, so the LAN path is plain HTTP; HTTPS comes from the Tailscale
+  sidecar, which bypasses the Ingress.
+- **sslip.io** is not a TLD; it's an ordinary domain under `.io`. Its DNS
+  server answers with whatever IP is embedded in the name you look up:
+  `hub.192.168.1.100.sslip.io` (or `hub.192-168-1-100.sslip.io`) → `192.168.1.100`.
+  That gives the Ingress a real hostname to match without local DNS,
+  `/etc/hosts` edits or a bought domain. `render.sh` fills in `NODE_LAN_IP`
+  from `k8s/env.local`. Caveats:
+  - The lookup goes to sslip.io's public DNS, so clients need internet access.
+    Some routers' DNS-rebinding protection drops public names that resolve to
+    private IPs.
+  - The IP is part of the name. If the box's LAN IP changes, re-render and
+    re-apply; a DHCP reservation for the box avoids this.
+  - No practical TLS. A Let's Encrypt cert would need the box reachable from
+    the internet, which is another reason HTTPS goes through Tailscale.
 - **Persistent Hub state.** A **PersistentVolumeClaim** requests durable disk;
   k3s's `local-path` provisioner satisfies it with a directory on the node.
   `hub-state` holds the SQLite DB (user table + bcrypt credentials) and the
